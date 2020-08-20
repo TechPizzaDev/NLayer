@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace NLayer.NAudioSupport
 {
-    class Mp3FrameWrapper : IMpegFrame
+    internal class Mp3FrameWrapper : IMpegFrame
     {
-        NAudio.Wave.Mp3Frame _frame;
+        private NAudio.Wave.Mp3Frame _frame;
 
         internal NAudio.Wave.Mp3Frame WrappedFrame
         {
@@ -18,42 +15,27 @@ namespace NLayer.NAudioSupport
             }
         }
 
-        public int SampleRate
-        {
-            get { return _frame.SampleRate; }
-        }
+        public int SampleRate => _frame.SampleRate;
 
-        public int SampleRateIndex
-        {
-            // we have to manually parse this out
-            get
-            {
+        public int SampleRateIndex =>
                 // sri is in bits 10 & 11 of the sync DWORD...  pull them out
-                return (_frame.RawData[2] >> 2) & 3;
-            }
-        }
+                (_frame.RawData[2] >> 2) & 3;
 
-        public int FrameLength
-        {
-            get { return _frame.FrameLength; }
-        }
+        public int FrameLength => _frame.FrameLength;
 
-        public int BitRate
-        {
-            get { return _frame.BitRate; }
-        }
+        public int BitRate => _frame.BitRate;
 
         public MpegVersion Version
         {
             get
             {
-                switch (_frame.MpegVersion)
+                return _frame.MpegVersion switch
                 {
-                    case NAudio.Wave.MpegVersion.Version1: return MpegVersion.Version1;
-                    case NAudio.Wave.MpegVersion.Version2: return MpegVersion.Version2;
-                    case NAudio.Wave.MpegVersion.Version25: return MpegVersion.Version25;
-                }
-                return MpegVersion.Unknown;
+                    NAudio.Wave.MpegVersion.Version1 => MpegVersion.Version1,
+                    NAudio.Wave.MpegVersion.Version2 => MpegVersion.Version2,
+                    NAudio.Wave.MpegVersion.Version25 => MpegVersion.Version25,
+                    _ => MpegVersion.Unknown,
+                };
             }
         }
 
@@ -61,13 +43,13 @@ namespace NLayer.NAudioSupport
         {
             get
             {
-                switch (_frame.MpegLayer)
+                return _frame.MpegLayer switch
                 {
-                    case NAudio.Wave.MpegLayer.Layer1: return MpegLayer.LayerI;
-                    case NAudio.Wave.MpegLayer.Layer2: return MpegLayer.LayerII;
-                    case NAudio.Wave.MpegLayer.Layer3: return MpegLayer.LayerIII;
-                }
-                return MpegLayer.Unknown;
+                    NAudio.Wave.MpegLayer.Layer1 => MpegLayer.LayerI,
+                    NAudio.Wave.MpegLayer.Layer2 => MpegLayer.LayerII,
+                    NAudio.Wave.MpegLayer.Layer3 => MpegLayer.LayerIII,
+                    _ => MpegLayer.Unknown,
+                };
             }
         }
 
@@ -75,50 +57,32 @@ namespace NLayer.NAudioSupport
         {
             get
             {
-                switch (_frame.ChannelMode)
+                return _frame.ChannelMode switch
                 {
-                    case NAudio.Wave.ChannelMode.Stereo: return MpegChannelMode.Stereo;
-                    case NAudio.Wave.ChannelMode.JointStereo: return MpegChannelMode.JointStereo;
-                    case NAudio.Wave.ChannelMode.DualChannel: return MpegChannelMode.DualChannel;
-                    case NAudio.Wave.ChannelMode.Mono: return MpegChannelMode.Mono;
-                }
-                return (MpegChannelMode)(-1);
+                    NAudio.Wave.ChannelMode.Stereo => MpegChannelMode.Stereo,
+                    NAudio.Wave.ChannelMode.JointStereo => MpegChannelMode.JointStereo,
+                    NAudio.Wave.ChannelMode.DualChannel => MpegChannelMode.DualChannel,
+                    NAudio.Wave.ChannelMode.Mono => MpegChannelMode.Mono,
+                    _ => (MpegChannelMode)(-1),
+                };
             }
         }
 
-        public int ChannelModeExtension
-        {
-            get { return _frame.ChannelExtension; }
-        }
+        public int ChannelModeExtension => _frame.ChannelExtension;
 
-        public int SampleCount
-        {
-            get { return _frame.SampleCount; }
-        }
+        public int SampleCount => _frame.SampleCount;
 
-        public int BitRateIndex
-        {
-            get { return _frame.BitRateIndex; }
-        }
+        public int BitRateIndex => _frame.BitRateIndex;
 
-        public bool IsCopyrighted
-        {
-            get { return _frame.Copyright; }
-        }
+        public bool IsCopyrighted => _frame.Copyright;
 
-        public bool HasCrc
-        {
-            get { return _frame.CrcPresent; }
-        }
+        public bool HasCrc => _frame.CrcPresent;
 
         // we assume everything is good here since NAudio should've already caught any errors
-        public bool IsCorrupted
-        {
-            get { return false; }
-        }
+        public bool IsCorrupted => false;
 
-        int _readOffset, _bitsRead;
-        ulong _bitBucket;
+        private int _readOffset, _bitsRead;
+        private ulong _bitBucket;
 
         public void Reset()
         {
@@ -131,10 +95,13 @@ namespace NLayer.NAudioSupport
 
         public int ReadBits(int bitCount)
         {
-            if (bitCount < 1 || bitCount > 32) throw new ArgumentOutOfRangeException("bitCount");
+            if (bitCount < 1 || bitCount > 32)
+                throw new ArgumentOutOfRangeException(nameof(bitCount));
+
             while (_bitsRead < bitCount)
             {
-                if (_readOffset == _frame.FrameLength) throw new System.IO.EndOfStreamException();
+                if (_readOffset == _frame.FrameLength)
+                    throw new System.IO.EndOfStreamException();
 
                 var b = _frame.RawData[_readOffset++];
                 _bitBucket <<= 8;

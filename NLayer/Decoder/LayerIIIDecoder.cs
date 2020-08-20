@@ -38,18 +38,17 @@ namespace NLayer.Decoder
     /// <summary>
     /// Class Implementing Layer 3 Decoder.
     /// </summary>
-    sealed class LayerIIIDecoder : LayerDecoderBase
+    internal sealed class LayerIIIDecoder : LayerDecoderBase
     {
-        const int SSLIMIT = 18;
+        private const int SSLIMIT = 18;
 
         #region Child Classes
 
         // This class is based on the Fluendo hybrid logic.
-        class HybridMDCT
+        private class HybridMDCT
         {
-            const float PI = (float)Math.PI;
-
-            static float[][] _swin;
+            private const double PI = Math.PI;
+            private static float[][] _swin;
 
             static HybridMDCT()
             {
@@ -90,48 +89,48 @@ namespace NLayer.Decoder
 
             #region Tables
 
-            static float[] icos72_table = {
-                                          5.004763425816599609063928255636710673570632934570312500000000e-01f,
-                                          5.019099187716736798492433990759309381246566772460937500000000e-01f,
-                                          5.043144802900764167574720886477734893560409545898437500000000e-01f,
-                                          5.077133059428725614381505693017970770597457885742187500000000e-01f,
-                                          5.121397571572545714957414020318537950515747070312500000000000e-01f,
-                                          5.176380902050414789528076653368771076202392578125000000000000e-01f,
-                                          5.242645625704053236049162478593643754720687866210937500000000e-01f,
-                                          5.320888862379560269033618169487453997135162353515625000000000e-01f,
-                                          5.411961001461970122150546558259520679712295532226562500000000e-01f,
-                                          5.516889594812458552652856269560288637876510620117187500000000e-01f,
-                                          5.636909734331712051869089918909594416618347167968750000000000e-01f,
-                                          5.773502691896257310588680411456152796745300292968750000000000e-01f,
-                                          5.928445237170802961657045671017840504646301269531250000000000e-01f,
-                                          6.103872943807280293526673631276935338973999023437500000000000e-01f,
-                                          6.302362070051321651931175438221544027328491210937500000000000e-01f,
-                                          6.527036446661392821155800447741057723760604858398437500000000e-01f,
-                                          6.781708524546284921896699415810871869325637817382812500000000e-01f,
-                                          7.071067811865474617150084668537601828575134277343750000000000e-01f,
-                                          7.400936164611303658134033867099788039922714233398437500000000e-01f,
-                                          7.778619134302061643992942663317080587148666381835937500000000e-01f,
-                                          8.213398158522907666068135768000502139329910278320312500000000e-01f,
-                                          8.717233978105488612087015098950359970331192016601562500000000e-01f,
-                                          9.305794983517888807611484480730723589658737182617187500000000e-01f,
-                                          9.999999999999997779553950749686919152736663818359375000000000e-01f,
-                                          1.082840285100100219395358180918265134096145629882812500000000e+00f,
-                                          1.183100791576249255498964885191526263952255249023437500000000e+00f,
-                                          1.306562964876376353728915091778617352247238159179687500000000e+00f,
-                                          1.461902200081543146126250576344318687915802001953125000000000e+00f,
-                                          1.662754761711521034328598034335300326347351074218750000000000e+00f,
-                                          1.931851652578135070115195048856548964977264404296875000000000e+00f,
-                                          2.310113157672649020213384574162773787975311279296875000000000e+00f,
-                                          2.879385241571815523542454684502445161342620849609375000000000e+00f,
-                                          3.830648787770197127855453800293616950511932373046875000000000e+00f,
-                                          5.736856622834929808618653623852878808975219726562500000000000e+00f,
-                                          1.146279281302667207853573927422985434532165527343750000000000e+01f
-                                          };
+            private static float[] icos72_table = {
+                5.004763425816599609063928255636710673570632934570312500000000e-01f,
+                5.019099187716736798492433990759309381246566772460937500000000e-01f,
+                5.043144802900764167574720886477734893560409545898437500000000e-01f,
+                5.077133059428725614381505693017970770597457885742187500000000e-01f,
+                5.121397571572545714957414020318537950515747070312500000000000e-01f,
+                5.176380902050414789528076653368771076202392578125000000000000e-01f,
+                5.242645625704053236049162478593643754720687866210937500000000e-01f,
+                5.320888862379560269033618169487453997135162353515625000000000e-01f,
+                5.411961001461970122150546558259520679712295532226562500000000e-01f,
+                5.516889594812458552652856269560288637876510620117187500000000e-01f,
+                5.636909734331712051869089918909594416618347167968750000000000e-01f,
+                5.773502691896257310588680411456152796745300292968750000000000e-01f,
+                5.928445237170802961657045671017840504646301269531250000000000e-01f,
+                6.103872943807280293526673631276935338973999023437500000000000e-01f,
+                6.302362070051321651931175438221544027328491210937500000000000e-01f,
+                6.527036446661392821155800447741057723760604858398437500000000e-01f,
+                6.781708524546284921896699415810871869325637817382812500000000e-01f,
+                7.071067811865474617150084668537601828575134277343750000000000e-01f,
+                7.400936164611303658134033867099788039922714233398437500000000e-01f,
+                7.778619134302061643992942663317080587148666381835937500000000e-01f,
+                8.213398158522907666068135768000502139329910278320312500000000e-01f,
+                8.717233978105488612087015098950359970331192016601562500000000e-01f,
+                9.305794983517888807611484480730723589658737182617187500000000e-01f,
+                9.999999999999997779553950749686919152736663818359375000000000e-01f,
+                1.082840285100100219395358180918265134096145629882812500000000e+00f,
+                1.183100791576249255498964885191526263952255249023437500000000e+00f,
+                1.306562964876376353728915091778617352247238159179687500000000e+00f,
+                1.461902200081543146126250576344318687915802001953125000000000e+00f,
+                1.662754761711521034328598034335300326347351074218750000000000e+00f,
+                1.931851652578135070115195048856548964977264404296875000000000e+00f,
+                2.310113157672649020213384574162773787975311279296875000000000e+00f,
+                2.879385241571815523542454684502445161342620849609375000000000e+00f,
+                3.830648787770197127855453800293616950511932373046875000000000e+00f,
+                5.736856622834929808618653623852878808975219726562500000000000e+00f,
+                1.146279281302667207853573927422985434532165527343750000000000e+01f
+            };
 
             #endregion
 
-            List<float[]> _prevBlock;
-            List<float[]> _nextBlock;
+            private List<float[]> _prevBlock;
+            private List<float[]> _nextBlock;
 
             internal HybridMDCT()
             {
@@ -145,16 +144,14 @@ namespace NLayer.Decoder
                 _nextBlock.Clear();
             }
 
-            void GetPrevBlock(int channel, out float[] prevBlock, out float[] nextBlock)
+            private void GetPrevBlock(int channel, out float[] prevBlock, out float[] nextBlock)
             {
                 while (_prevBlock.Count <= channel)
-                {
                     _prevBlock.Add(new float[SSLIMIT * SBLIMIT]);
-                }
+
                 while (_nextBlock.Count <= channel)
-                {
                     _nextBlock.Add(new float[SSLIMIT * SBLIMIT]);
-                }
+
                 prevBlock = _prevBlock[channel];
                 nextBlock = _nextBlock[channel];
 
@@ -167,8 +164,7 @@ namespace NLayer.Decoder
             {
                 // get the previous & next blocks so we can overlap correctly
                 //  NB: we swap each pass so we can add the previous block in a single pass
-                float[] prevblck, nextblck;
-                GetPrevBlock(channel, out prevblck, out nextblck);
+                GetPrevBlock(channel, out float[] prevblck, out float[] nextblck);
 
                 // now we have a few options for processing blocks...
                 int start = 0;
@@ -196,10 +192,10 @@ namespace NLayer.Decoder
                 }
             }
 
-            float[] _imdctTemp = new float[SSLIMIT];
-            float[] _imdctResult = new float[SSLIMIT * 2];
+            private float[] _imdctTemp = new float[SSLIMIT];
+            private float[] _imdctResult = new float[SSLIMIT * 2];
 
-            void LongImpl(float[] fsIn, int sbStart, int sbLimit, float[] nextblck, int blockType)
+            private void LongImpl(float[] fsIn, int sbStart, int sbLimit, float[] nextblck, int blockType)
             {
                 for (int sb = sbStart, ofs = sbStart * SSLIMIT; sb < sbLimit; sb++)
                 {
@@ -214,7 +210,8 @@ namespace NLayer.Decoder
                     {
                         fsIn[ofs++] = _imdctResult[i] * win[i];
                     }
-                    ofs -= 18;
+                    ofs -= SSLIMIT;
+
                     for (; i < SSLIMIT * 2; i++)
                     {
                         nextblck[ofs++] = _imdctResult[i] * win[i];
@@ -222,11 +219,16 @@ namespace NLayer.Decoder
                 }
             }
 
-            static void LongIMDCT(float[] invec, float[] outvec)
+            private static void LongIMDCT(float[] invec, float[] outvec)
             {
-                int i;
-                float[] H = new float[17], h = new float[18], even = new float[9], odd = new float[9], even_idct = new float[9], odd_idct = new float[9];
+                Span<float> H = stackalloc float[17];
+                Span<float> h = stackalloc float[18];
+                Span<float> even = stackalloc float[9];
+                Span<float> odd = stackalloc float[9];
+                Span<float> even_idct = stackalloc float[9];
+                Span<float> odd_idct = stackalloc float[9];
 
+                int i;
                 for (i = 0; i < 17; i++)
                     H[i] = invec[i] + invec[i + 1];
 
@@ -284,20 +286,22 @@ namespace NLayer.Decoder
                 outvec[27] = outvec[26] = -h[0];
             }
 
-            static float ICOS72_A(int i)
+            private static float ICOS72_A(int i)
             {
                 return icos72_table[2 * i];
             }
 
-            static float ICOS36_A(int i)
+            private static float ICOS36_A(int i)
             {
                 return icos72_table[4 * i + 1];
             }
 
-            static void imdct_9pt(float[] invec, float[] outvec)
+            private static void imdct_9pt(ReadOnlySpan<float> invec, Span<float> outvec)
             {
+                Span<float> even_idct = stackalloc float[5];
+                Span<float> odd_idct = stackalloc float[4];
+
                 int i;
-                float[] even_idct = new float[5], odd_idct = new float[4];
                 float t0, t1, t2;
 
                 /* BEGIN 5 Point IMDCT */
@@ -356,7 +360,7 @@ namespace NLayer.Decoder
                 }
             }
 
-            void ShortImpl(float[] fsIn, int sbStart, float[] nextblck)
+            private void ShortImpl(float[] fsIn, int sbStart, float[] nextblck)
             {
                 var win = _swin[2];
 
@@ -403,12 +407,16 @@ namespace NLayer.Decoder
                 }
             }
 
-            const float sqrt32 = 0.8660254037844385965883020617184229195117950439453125f;
+            private const float sqrt32 = 0.8660254037844385965883020617184229195117950439453125f;
 
-            static void ShortIMDCT(float[] invec, int inIdx, float[] outvec)
+            private static void ShortIMDCT(float[] invec, int inIdx, float[] outvec)
             {
+                Span<float> H = stackalloc float[6];
+                Span<float> h = stackalloc float[6];
+                Span<float> even_idct = stackalloc float[3];
+                Span<float> odd_idct = stackalloc float[3];
+
                 int i;
-                float[] H = new float[6], h = new float[6], even_idct = new float[3], odd_idct = new float[3];
                 float t0, t1, t2;
 
                 /* Preprocess the input to the two 3-point IDCT's */
@@ -478,8 +486,8 @@ namespace NLayer.Decoder
             return true;
         }
 
-        HybridMDCT _hybrid = new HybridMDCT();
-        BitReservoir _bitRes = new BitReservoir();
+        private HybridMDCT _hybrid = new HybridMDCT();
+        private BitReservoir _bitRes = new BitReservoir();
 
         internal LayerIIIDecoder()
         {
@@ -623,25 +631,24 @@ namespace NLayer.Decoder
 
         #region Variables
 
-        int _channels, _privBits, _mainDataBegin;
+        private int _channels, _privBits, _mainDataBegin;
+        private int[][] _scfsi = { new int[4], new int[4] };                //     ch, scfsi_band
+        private int[][] _part23Length = { new int[2], new int[2] };         // gr, ch
+        private int[][] _bigValues = { new int[2], new int[2] };            // gr, ch
+        private float[][] _globalGain = { new float[2], new float[2] };     // gr, ch
+        private int[][] _scalefacCompress = { new int[2], new int[2] };     // gr, ch
+        private bool[][] _blockSplitFlag = { new bool[2], new bool[2] };    // gr, ch
+        private bool[][] _mixedBlockFlag = { new bool[2], new bool[2] };    // gr, ch
+        private int[][] _blockType = { new int[2], new int[2] };            // gr, ch
+        private int[][][] _tableSelect;                                     // gr, ch, region
+        private float[][][] _subblockGain;                                  // gr, ch, window
+        private int[][] _regionAddress1 = { new int[2], new int[2] };       // gr, ch
+        private int[][] _regionAddress2 = { new int[2], new int[2] };       // gr, ch
+        private int[][] _preflag = { new int[2], new int[2] };              // gr, ch
+        private float[][] _scalefacScale = { new float[2], new float[2] };  // gr, ch
+        private int[][] _count1TableSelect = { new int[2], new int[2] };    // gr, ch
 
-        int[][] _scfsi = { new int[4], new int[4] };                //     ch, scfsi_band
-        int[][] _part23Length = { new int[2], new int[2] };         // gr, ch
-        int[][] _bigValues = { new int[2], new int[2] };            // gr, ch
-        float[][] _globalGain = { new float[2], new float[2] };     // gr, ch
-        int[][] _scalefacCompress = { new int[2], new int[2] };     // gr, ch
-        bool[][] _blockSplitFlag = { new bool[2], new bool[2] };    // gr, ch
-        bool[][] _mixedBlockFlag = { new bool[2], new bool[2] };    // gr, ch
-        int[][] _blockType = { new int[2], new int[2] };            // gr, ch
-        int[][][] _tableSelect;                                     // gr, ch, region
-        float[][][] _subblockGain;                                  // gr, ch, window
-        int[][] _regionAddress1 = { new int[2], new int[2] };       // gr, ch
-        int[][] _regionAddress2 = { new int[2], new int[2] };       // gr, ch
-        int[][] _preflag = { new int[2], new int[2] };              // gr, ch
-        float[][] _scalefacScale = { new float[2], new float[2] };  // gr, ch
-        int[][] _count1TableSelect = { new int[2], new int[2] };    // gr, ch
-
-        static float[] GAIN_TAB =
+        private static float[] GAIN_TAB =
         {
             1.57009245868378E-16f, 1.86716512307887E-16f, 2.22044604925031E-16f, 2.64057024024816E-16f, 3.14018491736756E-16f, 3.73433024615774E-16f, 4.44089209850063E-16f, 5.28114048049630E-16f,
             6.28036983473509E-16f, 7.46866049231544E-16f, 8.88178419700125E-16f, 1.05622809609926E-15f, 1.25607396694702E-15f, 1.49373209846309E-15f, 1.77635683940025E-15f, 2.11245619219853E-15f,
@@ -679,7 +686,7 @@ namespace NLayer.Decoder
 
         #endregion
 
-        void ReadSideInfo(IMpegFrame frame)
+        private void ReadSideInfo(IMpegFrame frame)
         {
             if (frame.Version == MpegVersion.Version1)
             {
@@ -860,67 +867,66 @@ namespace NLayer.Decoder
 
         #region Variables
 
-        int[] _sfBandIndexL, _sfBandIndexS;
+        private int[] _sfBandIndexL, _sfBandIndexS;
 
         // these are byte[] to save memory
-        byte[] _cbLookupL = new byte[SSLIMIT * SBLIMIT], _cbLookupS = new byte[SSLIMIT * SBLIMIT], _cbwLookupS = new byte[SSLIMIT * SBLIMIT];
-        int _cbLookupSR;
+        private byte[] _cbLookupL = new byte[SSLIMIT * SBLIMIT], _cbLookupS = new byte[SSLIMIT * SBLIMIT], _cbwLookupS = new byte[SSLIMIT * SBLIMIT];
+        private int _cbLookupSR;
+        private static readonly int[][] _sfBandIndexLTable = {
+            // MPEG 1
+            // 44.1 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576 },
+            // 48 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576 },
+            // 32 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576 },
 
-        static readonly int[][] _sfBandIndexLTable = {
-                                                         // MPEG 1
-                                                         // 44.1 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576 },
-                                                         // 48 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576 },
-                                                         // 32 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576 },
+            // MPEG 2
+            // 22.05 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576 },
+            // 24 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576 },
+            // 16 kHz
+            new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576 },
 
-                                                         // MPEG 2
-                                                         // 22.05 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576 },
-                                                         // 24 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 42, 50, 60, 72, 88, 106, 128, 156, 190, 230, 276, 330, 384, 576 },
-                                                         // 16 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 54, 66, 82, 102, 126, 156, 194, 240, 296, 364, 448, 550, 576 },
+            // MPEG 2.5
+            // 11.025 kHz
+            new int[] { 0, 6, 12, 18, 24, 30, 36, 44, 54, 66, 80, 96, 116, 140, 168, 200, 238, 284, 336, 396, 464, 522, 576 },
+            // 12 kHz
+            new int[] { 0, 6, 12, 18, 24, 30, 36, 44, 54, 66, 80, 96, 116, 140, 168, 200, 238, 284, 336, 396, 464, 522, 576 },
+            // 8 kHz
+            new int[] { 0, 12, 24, 36, 48, 60, 72, 88, 108, 132, 160, 192, 232, 280, 336, 400, 476, 566, 568, 570, 572, 574, 576 },
+        };
+       
+        private static readonly int[][] _sfBandIndexSTable = {
+            // MPEG 1
+            // 44.1 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192 },
+            // 48 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192 },
+            // 32 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192 },
 
-                                                         // MPEG 2.5
-                                                         // 11.025 kHz
-                                                         new int[] { 0, 6, 12, 18, 24, 30, 36, 44, 54, 66, 80, 96, 116, 140, 168, 200, 238, 284, 336, 396, 464, 522, 576 },
-                                                         // 12 kHz
-                                                         new int[] { 0, 6, 12, 18, 24, 30, 36, 44, 54, 66, 80, 96, 116, 140, 168, 200, 238, 284, 336, 396, 464, 522, 576 },
-                                                         // 8 kHz
-                                                         new int[] { 0, 12, 24, 36, 48, 60, 72, 88, 108, 132, 160, 192, 232, 280, 336, 400, 476, 566, 568, 570, 572, 574, 576 },
-                                                     };
+            // MPEG 2
+            // 22.05 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192 },
+            // 24 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192 },
+            // 16 kHz
+            new int[] { 0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192 },
 
-        static readonly int[][] _sfBandIndexSTable = {
-                                                         // MPEG 1
-                                                         // 44.1 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192 },
-                                                         // 48 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192 },
-                                                         // 32 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192 },
-
-                                                         // MPEG 2
-                                                         // 22.05 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 30, 40, 52, 66, 84, 106, 136, 192 },
-                                                         // 24 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 28, 38, 50, 64, 80, 100, 126, 192 },
-                                                         // 16 kHz
-                                                         new int[] { 0, 4, 8, 12, 16, 22, 30, 42, 58, 78, 104, 138, 180, 192 },
-
-                                                         // MPEG 2.5
-                                                         // 11.025 kHz
-                                                         new int[] { 0, 4, 8, 12, 18, 26, 36, 48, 62, 80, 104, 134, 174, 192 },
-                                                         // 12 kHz
-                                                         new int[] { 0, 4, 8, 12, 18, 26, 36, 48, 62, 80, 104, 134, 174, 192 },
-                                                         // 8 kHz
-                                                         new int[] { 0, 8, 16, 24, 36, 52, 72, 96, 124, 160, 162, 164, 166, 192 },
-                                                     };
+            // MPEG 2.5
+            // 11.025 kHz
+            new int[] { 0, 4, 8, 12, 18, 26, 36, 48, 62, 80, 104, 134, 174, 192 },
+            // 12 kHz
+            new int[] { 0, 4, 8, 12, 18, 26, 36, 48, 62, 80, 104, 134, 174, 192 },
+            // 8 kHz
+            new int[] { 0, 8, 16, 24, 36, 52, 72, 96, 124, 160, 162, 164, 166, 192 },
+        };
 
         #endregion
 
-        void PrepTables(IMpegFrame frame)
+        private void PrepTables(IMpegFrame frame)
         {
             if (_cbLookupSR != frame.SampleRate)
             {
@@ -1009,28 +1015,28 @@ namespace NLayer.Decoder
 
         #region Variables
 
-        int[][][] _scalefac = {   // ch, window, cb
-                                  new int[][] { new int[13], new int[13], new int[13], new int[23] },
-                                  new int[][] { new int[13], new int[13], new int[13], new int[23] }
-                              };
+        private int[][][] _scalefac = {   // ch, window, cb
+            new int[][] { new int[13], new int[13], new int[13], new int[23] },
+            new int[][] { new int[13], new int[13], new int[13], new int[23] }
+        };
 
-        static readonly int[][] _slen = {
-                                            new int[] { 0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4 },
-                                            new int[] { 0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3 }
-                                        };
+        private static readonly int[][] _slen = {
+            new int[] { 0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4 },
+            new int[] { 0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 3 }
+        };
 
-        static readonly int[][][] _sfbBlockCntTab = {
-                                                        new int[][] { new int[] { 6, 5, 5, 5 },   new int[] { 9, 9, 9, 9 },    new int[] { 6, 9, 9, 9 }   },
-                                                        new int[][] { new int[] { 6, 5, 7, 3 },   new int[] { 9, 9, 12, 6 },   new int[] { 6, 9, 12, 6 }  },
-                                                        new int[][] { new int[] { 11, 10, 0, 0 }, new int[] { 18, 18, 0, 0 },  new int[] { 15, 18, 0, 0 } },
-                                                        new int[][] { new int[] { 7, 7, 7, 0 },   new int[] { 12, 12, 12, 0 }, new int[] { 6, 15, 12, 0 } },
-                                                        new int[][] { new int[] { 6, 6, 6, 3 },   new int[] { 12, 9, 9, 6 },   new int[] { 6, 12, 9, 6 }  },
-                                                        new int[][] { new int[] { 8, 8, 5, 0 },   new int[] { 15, 12, 9, 0 },  new int[] { 6, 18, 9, 0 }  },
-                                                    };
+        private static readonly int[][][] _sfbBlockCntTab = {
+            new int[][] { new int[] { 6, 5, 5, 5 },   new int[] { 9, 9, 9, 9 },    new int[] { 6, 9, 9, 9 }   },
+            new int[][] { new int[] { 6, 5, 7, 3 },   new int[] { 9, 9, 12, 6 },   new int[] { 6, 9, 12, 6 }  },
+            new int[][] { new int[] { 11, 10, 0, 0 }, new int[] { 18, 18, 0, 0 },  new int[] { 15, 18, 0, 0 } },
+            new int[][] { new int[] { 7, 7, 7, 0 },   new int[] { 12, 12, 12, 0 }, new int[] { 6, 15, 12, 0 } },
+            new int[][] { new int[] { 6, 6, 6, 3 },   new int[] { 12, 9, 9, 6 },   new int[] { 6, 12, 9, 6 }  },
+            new int[][] { new int[] { 8, 8, 5, 0 },   new int[] { 15, 12, 9, 0 },  new int[] { 6, 18, 9, 0 }  },
+        };
 
         #endregion
 
-        int ReadScalefactors(int gr, int ch)
+        private int ReadScalefactors(int gr, int ch)
         {
             var slen0 = _slen[0][_scalefacCompress[gr][ch]];
             var slen1 = _slen[1][_scalefacCompress[gr][ch]];
@@ -1163,7 +1169,7 @@ namespace NLayer.Decoder
             return bits;
         }
 
-        int ReadLsfScalefactors(int gr, int ch, int chanModeExt)
+        private int ReadLsfScalefactors(int gr, int ch, int chanModeExt)
         {
             var sfc = _scalefacCompress[gr][ch];
 
@@ -1259,7 +1265,7 @@ namespace NLayer.Decoder
             }
 
             // now we populate our buffer...
-            var buffer = new int[54];
+            Span<int> buffer = stackalloc int[54];
 
             var k = 0;
             var blkCnt = _sfbBlockCntTab[blockNumber][blockTypeNumber];
@@ -1319,13 +1325,11 @@ namespace NLayer.Decoder
 
         #region Huffman & Dequantize
 
-        #region Variables
+        private float[][] _samples = { new float[SSLIMIT * SBLIMIT + 3], new float[SSLIMIT * SBLIMIT + 3] };
 
-        float[][] _samples = { new float[SSLIMIT * SBLIMIT + 3], new float[SSLIMIT * SBLIMIT + 3] };
+        private static readonly int[] PRETAB = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0 };
 
-        static readonly int[] PRETAB = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0 };
-
-        static readonly float[] POW2_TAB =
+        private static readonly float[] POW2_TAB =
         {
             1.000000000000000E-00f, 7.071067811865470E-01f, 5.000000000000000E-01f, 3.535533905932740E-01f, 2.500000000000000E-01f, 1.767766952966370E-01f, 1.250000000000000E-01f, 8.838834764831840E-02f,
             6.250000000000000E-02f, 4.419417382415920E-02f, 3.125000000000000E-02f, 2.209708691207960E-02f, 1.562500000000000E-02f, 1.104854345603980E-02f, 7.812500000000000E-03f, 5.524271728019900E-03f,
@@ -1337,9 +1341,7 @@ namespace NLayer.Decoder
             3.725290298461910E-09f, 2.634178031930880E-09f, 1.862645149230960E-09f, 1.317089015965440E-09f, 9.313225746154790E-10f, 6.585445079827190E-10f, 4.656612873077390E-10f, 3.292722539913600E-10f,
         };
 
-        #endregion
-
-        void ReadSamples(int sfBits, int gr, int ch)
+        private void ReadSamples(int sfBits, int gr, int ch)
         {
             int region1Start, region2Start;
             if (_blockSplitFlag[gr][ch] && _blockType[gr][ch] == 2)
@@ -1363,22 +1365,28 @@ namespace NLayer.Decoder
             while (idx < bigValueCount && idx < region1Start)
             {
                 Huffman.Decode(_bitRes, h, out x, out y);
-                _samples[ch][idx] = Dequantize(idx, x, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, y, gr, ch); ++idx;
+                _samples[ch][idx] = Dequantize(idx, x, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, y, gr, ch);
+                ++idx;
             }
             h = _tableSelect[gr][ch][1];
             while (idx < bigValueCount && idx < region2Start)
             {
                 Huffman.Decode(_bitRes, h, out x, out y);
-                _samples[ch][idx] = Dequantize(idx, x, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, y, gr, ch); ++idx;
+                _samples[ch][idx] = Dequantize(idx, x, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, y, gr, ch);
+                ++idx;
             }
             h = _tableSelect[gr][ch][2];
             while (idx < bigValueCount)
             {
                 Huffman.Decode(_bitRes, h, out x, out y);
-                _samples[ch][idx] = Dequantize(idx, x, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, y, gr, ch); ++idx;
+                _samples[ch][idx] = Dequantize(idx, x, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, y, gr, ch);
+                ++idx;
             }
 
             // count1 section
@@ -1388,10 +1396,14 @@ namespace NLayer.Decoder
             while (part3end > _bitRes.BitsRead && idx < SBLIMIT * SSLIMIT)
             {
                 Huffman.Decode(_bitRes, h, out x, out y, out v, out w);
-                _samples[ch][idx] = Dequantize(idx, v, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, w, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, x, gr, ch); ++idx;
-                _samples[ch][idx] = Dequantize(idx, y, gr, ch); ++idx;
+                _samples[ch][idx] = Dequantize(idx, v, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, w, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, x, gr, ch);
+                ++idx;
+                _samples[ch][idx] = Dequantize(idx, y, gr, ch);
+                ++idx;
             }
 
             // adjust the bit stream if we're off somehow
@@ -1400,7 +1412,8 @@ namespace NLayer.Decoder
                 _bitRes.RewindBits((int)(_bitRes.BitsRead - part3end));
 
                 idx -= 4;
-                if (idx < 0) idx = 0;
+                if (idx < 0)
+                    idx = 0;
             }
 
             if (_bitRes.BitsRead < part3end)
@@ -1415,7 +1428,7 @@ namespace NLayer.Decoder
             }
         }
 
-        float Dequantize(int idx, float val, int gr, int ch)
+        private float Dequantize(int idx, float val, int gr, int ch)
         {
             if (val != 0f)
             {
@@ -1427,14 +1440,18 @@ namespace NLayer.Decoder
                     cb = _cbLookupS[idx];
                     window = _cbwLookupS[idx];
 
-                    return val * _globalGain[gr][ch] * POW2_TAB[(int)(-2 * (_subblockGain[gr][ch][window] - (_scalefacScale[gr][ch] * _scalefac[ch][window][cb])))];
+                    return
+                        val * _globalGain[gr][ch] *
+                        POW2_TAB[(int)(-2 * (_subblockGain[gr][ch][window] - (_scalefacScale[gr][ch] * _scalefac[ch][window][cb])))];
                 }
                 else
                 {
                     // long / mixed long section
                     cb = _cbLookupL[idx];
 
-                    return val * _globalGain[gr][ch] * POW2_TAB[(int)(2 * _scalefacScale[gr][ch] * (_scalefac[ch][3][cb] + _preflag[gr][ch] * PRETAB[cb]))];
+                    return
+                        val * _globalGain[gr][ch] *
+                        POW2_TAB[(int)(2 * _scalefacScale[gr][ch] * (_scalefac[ch][3][cb] + _preflag[gr][ch] * PRETAB[cb]))];
                 }
 
             }
@@ -1445,29 +1462,25 @@ namespace NLayer.Decoder
 
         #region Stereo
 
-        #region Variables
+        private static readonly float[][] _isRatio = {
+            new float[] { 0f, 0.211324865405187f, 0.366025403784439f, 0.5f, 0.633974596215561f, 0.788675134594813f, 1f },
+            new float[] { 1f, 0.788675134594813f, 0.633974596215561f, 0.5f, 0.366025403784439f, 0.211324865405187f, 0f }
+        };
 
-        static readonly float[][] _isRatio = {
-                                                 new float[] { 0f, 0.211324865405187f, 0.366025403784439f, 0.5f, 0.633974596215561f, 0.788675134594813f, 1f },
-                                                 new float[] { 1f, 0.788675134594813f, 0.633974596215561f, 0.5f, 0.366025403784439f, 0.211324865405187f, 0f }
-                                             };
+        private static readonly float[][][] _lsfRatio = {   // sfc%2, ch, isPos
+            new float[][]
+            {
+                new float[] { 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f, 0.0625000000027179f },
+                new float[] { 1f, 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f },
+            },
+            new float[][]
+            {
+                new float[] { 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f, 0.00390625000012838f },
+                new float[] { 1f, 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f },
+            },
+        };
 
-        static readonly float[][][] _lsfRatio = {   // sfc%2, ch, isPos
-                                                    new float[][]
-                                                    {
-                                                        new float[] { 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f, 0.0625000000027179f },
-                                                        new float[] { 1f, 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f },
-                                                    },
-                                                    new float[][]
-                                                    {
-                                                        new float[] { 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f, 0.00390625000012838f },
-                                                        new float[] { 1f, 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f },
-                                                    },
-                                                };
-
-        #endregion
-
-        void Stereo(MpegChannelMode channelMode, int chanModeExt, int gr, bool lsf)
+        private void Stereo(MpegChannelMode channelMode, int chanModeExt, int gr, bool lsf)
         {
             // do the stereo decoding as needed...  This really only applies in two cases:
             //  1) Joint Stereo and one (or both) of the extensions are enabled, or
@@ -1524,9 +1537,10 @@ namespace NLayer.Decoder
 
                     #region Long Processing
 
-                    // long processing is far simpler than short...  just process from the start of the scalefactor band after the last non-zero sample
+                    // long processing is far simpler than short...  
+                    // just process from the start of the scalefactor band after the last non-zero sample
                     // we also don't have to mess with "finding" again; it was done above
-                    var sfb = 0;
+                    int sfb = 0;
                     if (lastValueIdx > -1)
                     {
                         sfb = _cbLookupL[lastValueIdx] + 1;
@@ -1548,9 +1562,9 @@ namespace NLayer.Decoder
                     // now process the intensity bands
                     for (; sfb < lEnd; sfb++)
                     {
-                        var i = _sfBandIndexL[sfb];
-                        var width = _sfBandIndexL[sfb + 1] - _sfBandIndexL[sfb];
-                        var isPos = _scalefac[1][3][sfb];
+                        int i = _sfBandIndexL[sfb];
+                        int width = _sfBandIndexL[sfb + 1] - _sfBandIndexL[sfb];
+                        int isPos = _scalefac[1][3][sfb];
                         if (isPos == 7)
                         {
                             if (midSide)
@@ -1575,7 +1589,7 @@ namespace NLayer.Decoder
                     if (sStart <= -1)
                     {
                         // do final long processing
-                        var isPos = _scalefac[1][3][20];
+                        int isPos = _scalefac[1][3][20];
                         if (isPos == 7)
                         {
                             if (midSide)
@@ -1601,12 +1615,13 @@ namespace NLayer.Decoder
 
                     #region Short Processing
 
-                    // short processing requires that each window be looked at separately... they are interleaved, so it gets really interesting...
+                    // short processing requires that each window be looked at separately... 
+                    // they are interleaved, so it gets really interesting...
                     // on the plus side, whichever window the {lastValueIdx} is in is already found... :)
                     else
                     {
                         // find where each window starts intensity processing
-                        var sSfb = new int[] { -1, -1, -1 };
+                        Span<int> sSfb = stackalloc int[] { -1, -1, -1 };
                         int window;
                         if (lastValueIdx > -1)
                         {
@@ -1632,8 +1647,8 @@ namespace NLayer.Decoder
                                 continue;
                             }
 
-                            var width = _sfBandIndexS[sfb + 1] - _sfBandIndexS[sfb];
-                            var i = _sfBandIndexS[sfb] * 3 + width * (window + 1);
+                            int width = _sfBandIndexS[sfb + 1] - _sfBandIndexS[sfb];
+                            int i = _sfBandIndexS[sfb] * 3 + width * (window + 1);
 
                             while (--width >= -1)
                             {
@@ -1654,8 +1669,8 @@ namespace NLayer.Decoder
                         sfb = sStart;
                         for (; sfb < 12; sfb++)
                         {
-                            var width = _sfBandIndexS[sfb + 1] - _sfBandIndexS[sfb];
-                            var i = _sfBandIndexS[sfb] * 3;
+                            int width = _sfBandIndexS[sfb + 1] - _sfBandIndexS[sfb];
+                            int i = _sfBandIndexS[sfb] * 3;
 
                             for (window = 0; window < 3; window++)
                             {
@@ -1742,7 +1757,7 @@ namespace NLayer.Decoder
             }
         }
 
-        void ApplyIStereo(int i, int sb, int isPos)
+        private void ApplyIStereo(int i, int sb, int isPos)
         {
             if (StereoMode == StereoMode.DownmixToMono)
             {
@@ -1763,7 +1778,7 @@ namespace NLayer.Decoder
             }
         }
 
-        void ApplyLsfIStereo(int i, int sb, int isPos, int scalefacCompress)
+        private void ApplyLsfIStereo(int i, int sb, int isPos, int scalefacCompress)
         {
             var k0 = _lsfRatio[scalefacCompress % 1][isPos][0];
             var k1 = _lsfRatio[scalefacCompress % 1][isPos][1];
@@ -1785,7 +1800,7 @@ namespace NLayer.Decoder
             }
         }
 
-        void ApplyMidSide(int i, int sb)
+        private void ApplyMidSide(int i, int sb)
         {
             if (StereoMode == StereoMode.DownmixToMono)
             {
@@ -1807,7 +1822,7 @@ namespace NLayer.Decoder
             }
         }
 
-        void ApplyFullStereo(int i, int sb)
+        private void ApplyFullStereo(int i, int sb)
         {
             if (StereoMode == NLayer.StereoMode.DownmixToMono)
             {
@@ -1822,13 +1837,9 @@ namespace NLayer.Decoder
 
         #region Reorder
 
-        #region Variables
+        private float[] _reorderBuf = new float[SBLIMIT * SSLIMIT];
 
-        float[] _reorderBuf = new float[SBLIMIT * SSLIMIT];
-
-        #endregion
-
-        void Reorder(float[] buf, bool mixedBlock)
+        private void Reorder(float[] buf, bool mixedBlock)
         {
             // reorder into _reorderBuf, then copy back
             int sfb = 0;
@@ -1866,21 +1877,17 @@ namespace NLayer.Decoder
 
         #region Anti-Alias
 
-        #region Variables
+        private static readonly float[] _scs = {
+            0.85749292571254400f,  0.88174199731770500f,  0.94962864910273300f,  0.98331459249179000f,
+            0.99551781606758600f,  0.99916055817814800f,  0.99989919524444700f,  0.99999315507028000f,
+        };
 
-        static readonly float[] _scs = {
-                                        0.85749292571254400f,  0.88174199731770500f,  0.94962864910273300f,  0.98331459249179000f,
-                                        0.99551781606758600f,  0.99916055817814800f,  0.99989919524444700f,  0.99999315507028000f,
-                                       };
+        private static readonly float[] _sca = {
+            -0.51449575542752700f, -0.47173196856497200f, -0.31337745420390200f, -0.18191319961098100f,
+            -0.09457419252642070f, -0.04096558288530410f, -0.01419856857247120f, -0.00369997467376004f,
+        };
 
-        static readonly float[] _sca = {
-                                       -0.51449575542752700f, -0.47173196856497200f, -0.31337745420390200f, -0.18191319961098100f,
-                                       -0.09457419252642070f, -0.04096558288530410f, -0.01419856857247120f, -0.00369997467376004f,
-                                       };
-
-        #endregion
-
-        void AntiAlias(float[] buf, bool mixedBlock)
+        private void AntiAlias(float[] buf, bool mixedBlock)
         {
             int sblim;
             if (mixedBlock)
@@ -1908,7 +1915,7 @@ namespace NLayer.Decoder
 
         #region Frequency Inversion
 
-        void FrequencyInversion(float[] buf)
+        private void FrequencyInversion(float[] buf)
         {
             for (int ss = 1; ss < SSLIMIT; ss += 2)
             {
@@ -1923,14 +1930,10 @@ namespace NLayer.Decoder
 
         #region Inverse Polyphase
 
-        #region Variables
-
-        float[] _polyPhase = new float[SBLIMIT];
-
-        #endregion
+        private float[] _polyPhase = new float[SBLIMIT];
 
         // Layer III interleaves the samples, so we have to make them linear again
-        void InversePolyphase(float[] buf, int ch, int ofs, float[] outBuf)
+        private void InversePolyphase(float[] buf, int ch, int ofs, float[] outBuf)
         {
             for (int ss = 0; ss < SSLIMIT; ss++, ofs += SBLIMIT)
             {
@@ -1939,7 +1942,7 @@ namespace NLayer.Decoder
                     _polyPhase[sb] = buf[sb * SSLIMIT + ss];
                 }
 
-                base.InversePolyPhase(ch, _polyPhase);
+                InversePolyPhase(ch, _polyPhase);
                 Array.Copy(_polyPhase, 0, outBuf, ofs, SBLIMIT);
             }
         }

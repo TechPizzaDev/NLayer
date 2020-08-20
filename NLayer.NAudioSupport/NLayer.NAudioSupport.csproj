@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>netcoreapp3.1</TargetFrameworks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Authors>Mark Heath</Authors>
     <Version>1.1.0</Version>
@@ -10,8 +10,12 @@
     <Description>NAudio support for NLayer</Description>
     <PackageTags>NAudio NLayer MP3 audio</PackageTags>
   </PropertyGroup>
+  
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="1.9.0" />
-    <PackageReference Include="NLayer" Version="1.12.0" />
+    <PackageReference Include="NAudio" Version="1.10.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\NLayer\NLayer.csproj" />
   </ItemGroup>
 </Project>
