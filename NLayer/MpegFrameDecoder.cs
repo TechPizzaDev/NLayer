@@ -115,7 +115,7 @@ namespace NLayer
         {
             frame.Reset();
 
-            Decoder.LayerDecoderBase decoder = null;
+            Decoder.LayerDecoderBase decoder;
             switch (frame.Layer)
             {
                 case MpegLayer.LayerI:
@@ -135,39 +135,37 @@ namespace NLayer
                         _layerIIIDecoder = new Decoder.LayerIIIDecoder();
                     decoder = _layerIIIDecoder;
                     break;
+
+                default:
+                    return 0;
             }
 
-            if (decoder != null)
+            decoder.SetEQ(_eqFactors);
+            decoder.StereoMode = StereoMode;
+
+            var cnt = decoder.DecodeFrame(frame, _ch0, _ch1);
+
+            if (frame.ChannelMode == MpegChannelMode.Mono)
             {
-                decoder.SetEQ(_eqFactors);
-                decoder.StereoMode = StereoMode;
+                Buffer.BlockCopy(_ch0, 0, dest, destOffset * sizeof(float), cnt * sizeof(float));
+            }
+            else
+            {
+                // This is kinda annoying...  if we're doing a downmix, we should technically only output a single channel
+                //  The problem is, our caller is probably expecting stereo output.  Grrrr....
 
-                var cnt = decoder.DecodeFrame(frame, _ch0, _ch1);
-
-                if (frame.ChannelMode == MpegChannelMode.Mono)
+                // We use Buffer.BlockCopy here because we don't know dest's type, but do know it's big enough to do the copy
+                for (int i = 0; i < cnt; i++)
                 {
-                    Buffer.BlockCopy(_ch0, 0, dest, destOffset * sizeof(float), cnt * sizeof(float));
+                    Buffer.BlockCopy(_ch0, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
+                    ++destOffset;
+                    Buffer.BlockCopy(_ch1, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
+                    ++destOffset;
                 }
-                else
-                {
-                    // This is kinda annoying...  if we're doing a downmix, we should technically only output a single channel
-                    //  The problem is, our caller is probably expecting stereo output.  Grrrr....
-
-                    // We use Buffer.BlockCopy here because we don't know dest's type, but do know it's big enough to do the copy
-                    for (int i = 0; i < cnt; i++)
-                    {
-                        Buffer.BlockCopy(_ch0, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
-                        ++destOffset;
-                        Buffer.BlockCopy(_ch1, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
-                        ++destOffset;
-                    }
-                    cnt *= 2;
-                }
-
-                return cnt;
+                cnt *= 2;
             }
 
-            return 0;
+            return cnt;
         }
 
         /// <summary>

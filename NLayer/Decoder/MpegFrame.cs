@@ -534,7 +534,7 @@ namespace NLayer.Decoder
         public override string ToString()
         {
             // version
-            var sb = new StringBuilder("MPEG");
+            var sb = new System.Text.StringBuilder("MPEG");
             switch (Version)
             {
                 case MpegVersion.Version1: sb.Append("1"); break;
@@ -580,7 +580,7 @@ namespace NLayer.Decoder
             // sample rate
             sb.AppendFormat(" {0} KHz", (float)SampleRate / 1000);
 
-            var flagList = new List<string>();
+            var flagList = new System.Collections.Generic.List<string>();
             // protection
             if (HasCrc) flagList.Add("CRC");
 

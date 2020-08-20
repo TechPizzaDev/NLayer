@@ -44,7 +44,7 @@ namespace NLayer.Decoder
 
         #region Tables
 
-        static float[] DEWINDOW_TABLE = {
+        private static float[] DEWINDOW_TABLE = {
              0.000000000f, -0.000015259f, -0.000015259f, -0.000015259f,
             -0.000015259f, -0.000015259f, -0.000015259f, -0.000030518f,
             -0.000030518f, -0.000030518f, -0.000030518f, -0.000045776f,
@@ -195,14 +195,25 @@ namespace NLayer.Decoder
         private List<int> _bufOffset = new List<int>(2);
         private float[] _eq;
 
-        internal LayerDecoderBase()
+        public LayerDecoderBase()
         {
             StereoMode = StereoMode.Both;
         }
 
-        abstract internal int DecodeFrame(IMpegFrame frame, float[] ch0, float[] ch1);
+        public abstract int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1);
 
-        internal void SetEQ(float[] eq)
+        protected static Span<float> MapOutput(
+            int index, Span<int> mapping, Span<float> output0, Span<float> output1)
+        {
+            return (mapping[index]) switch
+            {
+                0 => output0,
+                1 => output1,
+                _ => throw new ArgumentException("Invalid mapping.", nameof(mapping)),
+            };
+        }
+
+        public void SetEQ(float[] eq)
         {
             if (eq == null || eq.Length == 32)
             {
@@ -210,15 +221,15 @@ namespace NLayer.Decoder
             }
         }
 
-        internal StereoMode StereoMode { get; set; }
+        public StereoMode StereoMode { get; set; }
 
-        virtual internal void ResetForSeek()
+        public virtual void ResetForSeek()
         {
             _synBuf.Clear();
             _bufOffset.Clear();
         }
 
-        protected void InversePolyPhase(int channel, float[] data)
+        protected void InversePolyPhase(int channel, Span<float> data)
         {
             GetBufAndOffset(channel, out float[] synBuf, out int k);
 
@@ -249,7 +260,7 @@ namespace NLayer.Decoder
             k = (k - 32) & 511;
             _bufOffset[channel] = k;
         }
-        
+
         private void DCT32(ReadOnlySpan<float> src, Span<float> dst, int k)
         {
             Span<float> ei32 = stackalloc float[16];
@@ -339,7 +350,7 @@ namespace NLayer.Decoder
             dst[14] = eo16[7];
             dst[15] = oo16[7];
         }
-        
+
         private void DCT8(ReadOnlySpan<float> src, Span<float> dst)
         {
             Span<float> ei8 = stackalloc float[4];
@@ -431,9 +442,9 @@ namespace NLayer.Decoder
                 {
                     var v_uvec = new Vector<float>(s_uvec);
                     var v_dewindowTable = new Vector<float>(dewindowTable);
-            
+
                     (v_uvec * v_dewindowTable).CopyTo(s_uvec);
-            
+
                     s_uvec = s_uvec.Slice(Vector<float>.Count);
                     dewindowTable = dewindowTable.Slice(Vector<float>.Count);
                 }

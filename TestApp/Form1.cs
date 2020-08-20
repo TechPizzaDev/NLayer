@@ -60,13 +60,12 @@ namespace TestApp
 
             Thread.Sleep(500);
 
-            string fileName = Path.GetFileNameWithoutExtension(sourceFile) + ".rawpcm";
+            string fileName = Path.GetFileNameWithoutExtension(sourceFile);
             fileName = Path.Combine(Environment.CurrentDirectory, fileName);
             Console.WriteLine("Result Path: " + fileName);
 
-            using var outFs = new FileStream(fileName, FileMode.Create);
-            dst.CopyTo(outFs);
-
+            WaveFileWriter.CreateWaveFile(fileName + ".wav", new RawSourceWaveStream(dst, sourceReader.WaveFormat));
+            
             //var p = new Process
             //{
             //    StartInfo = new ProcessStartInfo(fileName)

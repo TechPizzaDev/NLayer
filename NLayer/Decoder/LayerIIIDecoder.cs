@@ -504,38 +504,38 @@ namespace NLayer.Decoder
             };
         }
 
-        internal override int DecodeFrame(IMpegFrame frame, float[] ch0, float[] ch1)
+        public override int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             // load the frame information
             ReadSideInfo(frame);
 
             // load the frame's main data
             if (!_bitRes.AddBits(frame, _mainDataBegin))
-            {
                 return 0;
-            }
-
+            
             // prep the reusable tables
             PrepTables(frame);
 
+            Span<int> channelMapping = stackalloc int[2];
+
             // do our stereo mode setup
-            var chanBufs = new float[2][];
             var startChannel = 0;
             var endChannel = _channels - 1;
             if (_channels == 1 || StereoMode == StereoMode.LeftOnly || StereoMode == StereoMode.DownmixToMono)
             {
-                chanBufs[0] = ch0;
+                channelMapping[0] = 0;
                 endChannel = 0;
             }
             else if (StereoMode == StereoMode.RightOnly)
             {
-                chanBufs[1] = ch0;  // this is correct... if there's only a single channel output, it goes in channel 0's buffer
+                // this is correct... if there's only a single channel output, it goes in channel 0's buffer
+                channelMapping[1] = 0;  
                 startChannel = 1;
             }
             else    // MpegStereoMode.Both
             {
-                chanBufs[0] = ch0;
-                chanBufs[1] = ch1;
+                channelMapping[0] = 0;
+                channelMapping[1] = 1;
             }
 
             // get the granule count
@@ -573,13 +573,13 @@ namespace NLayer.Decoder
                 // stereo processing
                 Stereo(frame.ChannelMode, frame.ChannelModeExtension, gr, frame.Version != MpegVersion.Version1);
 
-                for (int ch = startChannel; ch <= endChannel; ch++)
+                for (int channelIndex = startChannel; channelIndex <= endChannel; channelIndex++)
                 {
                     // pull some values so we don't have to index them again later
-                    var buf = _samples[ch];
-                    var blockType = _blockType[gr][ch];
-                    var blockSplit = _blockSplitFlag[gr][ch];
-                    var mixedBlock = _mixedBlockFlag[gr][ch];
+                    var buf = _samples[channelIndex];
+                    var blockType = _blockType[gr][channelIndex];
+                    var blockSplit = _blockSplitFlag[gr][channelIndex];
+                    var mixedBlock = _mixedBlockFlag[gr][channelIndex];
 
                     // do the short/long/mixed logic here so it's only done once per channel per granule
                     if (blockSplit && blockType == 2)
@@ -603,13 +603,15 @@ namespace NLayer.Decoder
                     }
 
                     // hybrid processing
-                    _hybrid.Apply(buf, ch, blockType, blockSplit && mixedBlock);
+                    _hybrid.Apply(buf, channelIndex, blockType, blockSplit && mixedBlock);
 
                     // frequency inversion
                     FrequencyInversion(buf);
 
                     // inverse polyphase
-                    InversePolyphase(buf, ch, offset, chanBufs[ch]);
+
+                    Span<float> dst = MapOutput(channelIndex, channelMapping, ch0, ch1);
+                    InversePolyphase(buf, channelIndex, offset, dst);
                 }
 
                 offset += SBLIMIT * SSLIMIT;
@@ -618,7 +620,7 @@ namespace NLayer.Decoder
             return offset;
         }
 
-        internal override void ResetForSeek()
+        public override void ResetForSeek()
         {
             base.ResetForSeek();
 
@@ -1929,20 +1931,18 @@ namespace NLayer.Decoder
 
         #region Inverse Polyphase
 
-        private float[] _polyPhase = new float[SBLIMIT];
-
         // Layer III interleaves the samples, so we have to make them linear again
-        private void InversePolyphase(float[] buf, int ch, int ofs, float[] outBuf)
+        private void InversePolyphase(ReadOnlySpan<float> source, int ch, int ofs, Span<float> dst)
         {
+            Span<float> polyPhase = stackalloc float[SBLIMIT];
+
             for (int ss = 0; ss < SSLIMIT; ss++, ofs += SBLIMIT)
             {
                 for (int sb = 0; sb < SBLIMIT; sb++)
-                {
-                    _polyPhase[sb] = buf[sb * SSLIMIT + ss];
-                }
-
-                InversePolyPhase(ch, _polyPhase);
-                Array.Copy(_polyPhase, 0, outBuf, ofs, SBLIMIT);
+                    polyPhase[sb] = source[sb * SSLIMIT + ss];
+                
+                InversePolyPhase(ch, polyPhase);
+                polyPhase.CopyTo(dst.Slice(ofs));
             }
         }
 

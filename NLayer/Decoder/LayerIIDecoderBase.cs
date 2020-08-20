@@ -143,7 +143,7 @@ namespace NLayer.Decoder
             _polyPhaseBuf = new float[SBLIMIT];
         }
 
-        internal override int DecodeFrame(IMpegFrame frame, float[] ch0, float[] ch1)
+        public override int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             InitFrame(frame);
 
@@ -324,31 +324,32 @@ namespace NLayer.Decoder
             }
         }
 
-        private int DecodeSamples(float[] ch0, float[] ch1)
+        private int DecodeSamples(Span<float> ch0, Span<float> ch1)
         {
+            Span<int> channelMapping = stackalloc int[2];
+
             // do our stereo mode setup
-            var chanBufs = new float[2][];
             var startChannel = 0;
             var endChannel = _channels - 1;
             if (_channels == 1 || StereoMode == StereoMode.LeftOnly)
             {
-                chanBufs[0] = ch0;
+                channelMapping[0] = 0;
                 endChannel = 0;
             }
             else if (StereoMode == StereoMode.RightOnly)
             {
                 // this is correct... if there's only a single channel output, it goes in channel 0's buffer
-                chanBufs[1] = ch0; 
+                channelMapping[1] = 0;
                 startChannel = 1;
             }
             else  // MpegStereoMode.Both or StereoMode.DownmixToMono
             {
-                chanBufs[0] = ch0;
-                chanBufs[1] = ch1;
+                channelMapping[0] = 0;
+                channelMapping[1] = 1;
             }
 
             int idx = 0;
-            for (int ch = startChannel; ch <= endChannel; ch++)
+            for (int channelIndex = startChannel; channelIndex <= endChannel; channelIndex++)
             {
                 idx = 0;
                 for (int gr = 0; gr < _granuleCount; gr++)
@@ -364,7 +365,7 @@ namespace NLayer.Decoder
                             //     - All values can be handled with 16-bit logic as long as the correct C and D constants are used
                             //     - Make sure to normalize each sample to 16 bits!
 
-                            var alloc = _allocation[ch][sb];
+                            var alloc = _allocation[channelIndex][sb];
                             if (alloc != 0)
                             {
                                 float[] c, d;
@@ -383,8 +384,8 @@ namespace NLayer.Decoder
                                 // read sample; normalize, scale & center to [-0.999984741f..0.999984741f]; apply scalefactor
                                 _polyPhaseBuf[sb] =
                                     c[alloc] *
-                                    ((_samples[ch][idx] << (16 - alloc)) / 32768f + d[alloc])
-                                    * _denormalMultiplier[_scalefac[ch][gr][sb]];
+                                    ((_samples[channelIndex][idx] << (16 - alloc)) / 32768f + d[alloc])
+                                    * _denormalMultiplier[_scalefac[channelIndex][gr][sb]];
                             }
                             else
                             {
@@ -394,8 +395,10 @@ namespace NLayer.Decoder
                         }
 
                         // do the polyphase output for this channel, section, and granule
-                        InversePolyPhase(ch, _polyPhaseBuf);
-                        Array.Copy(_polyPhaseBuf, 0, chanBufs[ch], idx - SBLIMIT, SBLIMIT);
+                        InversePolyPhase(channelIndex, _polyPhaseBuf);
+
+                        Span<float> dst = MapOutput(channelIndex, channelMapping, ch0, ch1);
+                        _polyPhaseBuf.AsSpan(0, SBLIMIT).CopyTo(dst.Slice(idx - SBLIMIT));
                     }
                 }
             }
