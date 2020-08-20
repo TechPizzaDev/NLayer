@@ -1,100 +1,78 @@
 ﻿using System;
+using System.IO;
 
 namespace NLayer
 {
     public class MpegFile : IDisposable
     {
-        System.IO.Stream _stream;
-        bool _closeStream, _eofFound;
-
-        Decoder.MpegStreamReader _reader;
-        MpegFrameDecoder _decoder;
-
-        object _seekLock = new object();
-        long _position;
+        private Stream _stream;
+        private bool _leaveOpen, _eofFound;
+        private Decoder.MpegStreamReader _reader;
+        private MpegFrameDecoder _decoder;
+        private object _seekLock = new object();
+        private long _position;
 
         /// <summary>
         /// Construct Mpeg file representation from filename.
         /// </summary>
         /// <param name="fileName">The file which contains Mpeg data.</param>
-        public MpegFile(string fileName)
+        public MpegFile(string fileName) :
+            this(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read), false)
         {
-            Init(System.IO.File.Open(fileName, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read), true);
         }
 
         /// <summary>
         /// Construct Mpeg file representation from stream.
         /// </summary>
         /// <param name="stream">The input stream which contains Mpeg data.</param>
-        public MpegFile(System.IO.Stream stream)
-        {
-            Init(stream, false);
-        }
-
-        void Init(System.IO.Stream stream, bool closeStream)
+        public MpegFile(Stream stream, bool leaveOpen)
         {
             _stream = stream;
-            _closeStream = closeStream;
+            _leaveOpen = leaveOpen;
 
             _reader = new Decoder.MpegStreamReader(_stream);
-
             _decoder = new MpegFrameDecoder();
         }
 
         /// <summary>
-        /// Implements IDisposable.Dispose.
-        /// </summary>
-        public void Dispose()
-        {
-            if (_closeStream)
-            {
-                _stream.Dispose();
-                _closeStream = false;
-            }
-        }
-        /// <summary>
         /// Sample rate of source Mpeg, in Hertz.
         /// </summary>
-        public int SampleRate { get { return _reader.SampleRate; } }
+        public int SampleRate => _reader.SampleRate;
 
         /// <summary>
         /// Channel count of source Mpeg.
         /// </summary>
-        public int Channels { get { return _reader.Channels; } }
+        public int Channels => _reader.Channels;
 
         /// <summary>
         /// Whether the Mpeg stream supports seek operation.
         /// </summary>
-        public bool CanSeek { get { return _reader.CanSeek; } }
+        public bool CanSeek => _reader.CanSeek;
 
         /// <summary>
-        /// Data length of decoded data, in PCM.
+        /// Data length of decoded data in PCM bytes.
         /// </summary>
-        public long Length { get { return _reader.SampleCount * _reader.Channels * sizeof(float); } }
+        public long? Length => _reader.SampleCount * _reader.Channels * sizeof(float);
 
         /// <summary>
         /// Media duration of the Mpeg file.
         /// </summary>
-        public TimeSpan Duration
-        {
-            get
-            {
-                var len = _reader.SampleCount;
-                if (len == -1) return TimeSpan.Zero;
-                return TimeSpan.FromSeconds((double)len / _reader.SampleRate);
-            }
-        }
+        public TimeSpan? Duration =>
+            TimeSpan.FromSeconds((double)_reader.SampleCount.GetValueOrDefault() / _reader.SampleRate);
 
         /// <summary>
-        /// Current decode position, in number of sample. Calling the setter will result in a seeking operation.
+        /// Current decode position, in number of sample.
+        /// Calling the setter will result in a seeking operation.
         /// </summary>
         public long Position
         {
-            get { return _position; }
+            get => _position;
             set
             {
-                if (!_reader.CanSeek) throw new InvalidOperationException("Cannot Seek!");
-                if (value < 0L) throw new ArgumentOutOfRangeException("value");
+                if (!_reader.CanSeek)
+                    throw new InvalidOperationException("The stream is not seekable.");
+                if (value < 0L)
+                    throw new ArgumentOutOfRangeException(nameof(value));
 
                 // we're thinking in 4-byte samples, pcmStep interleaved...  adjust accordingly
                 var samples = value / sizeof(float) / _reader.Channels;
@@ -111,14 +89,16 @@ namespace NLayer
                 {
                     // seek the stream
                     var newPos = _reader.SeekTo(samples);
-                    if (newPos == -1) throw new ArgumentOutOfRangeException("value");
+                    if (newPos == -1)
+                        throw new ArgumentOutOfRangeException(nameof(value));
 
                     _decoder.Reset();
 
                     // if we have a sample offset, decode the next frame
                     if (sampleOffset != 0)
                     {
-                        _decoder.DecodeFrame(_reader.NextFrame(), _readBuf, 0); // throw away a frame (but allow the decoder to resync)
+                        // throw away a frame (but allow the decoder to resync)
+                        _decoder.DecodeFrame(_reader.NextFrame(), _readBuf, 0);
                         newPos += sampleOffset;
                     }
 
@@ -136,8 +116,8 @@ namespace NLayer
         /// </summary>
         public TimeSpan Time
         {
-            get { return TimeSpan.FromSeconds((double)_position / sizeof(float) / _reader.Channels / _reader.SampleRate); }
-            set { Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels * sizeof(float)); }
+            get => TimeSpan.FromSeconds((double)_position / sizeof(float) / _reader.Channels / _reader.SampleRate);
+            set => Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels * sizeof(float));
         }
 
         /// <summary>
@@ -154,8 +134,8 @@ namespace NLayer
         /// </summary>
         public StereoMode StereoMode
         {
-            get { return _decoder.StereoMode; }
-            set { _decoder.StereoMode = value; }
+            get => _decoder.StereoMode;
+            set => _decoder.StereoMode = value;
         }
 
         /// <summary>
@@ -168,7 +148,8 @@ namespace NLayer
         /// <returns>Sample size actually reads, in bytes.</returns>
         public int ReadSamples(byte[] buffer, int index, int count)
         {
-            if (index < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException("index");
+            if (index < 0 || index + count > buffer.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
 
             // make sure we're asking for an even number of samples
             count -= (count % sizeof(float));
@@ -181,14 +162,14 @@ namespace NLayer
         /// Result varies with diffirent <see cref="StereoMode"/>:
         /// <list type="bullet">
         /// <item>
-        /// <description>For <see cref="NLayer.StereoMode.Both"/>, sample data on both two channels will occur in turn (left first).</description>
+        /// <description>For <see cref="StereoMode.Both"/>, sample data on both two channels will occur in turn (left first).</description>
         /// </item>
         /// <item>
-        /// <description>For <see cref="NLayer.StereoMode.LeftOnly"/> and <see cref="NLayer.StereoMode.RightOnly"/>, only data on
+        /// <description>For <see cref="StereoMode.LeftOnly"/> and <see cref="StereoMode.RightOnly"/>, only data on
         /// specified channel will occur.</description>
         /// </item>
         /// <item>
-        /// <description>For <see cref="NLayer.StereoMode.DownmixToMono"/>, two channels will be down-mixed into single channel.</description>
+        /// <description>For <see cref="StereoMode.DownmixToMono"/>, two channels will be down-mixed into single channel.</description>
         /// </item>
         /// </list>
         /// </summary>
@@ -198,16 +179,17 @@ namespace NLayer
         /// <returns>Sample count actually reads.</returns>
         public int ReadSamples(float[] buffer, int index, int count)
         {
-            if (index < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException("index");
+            if (index < 0 || index + count > buffer.Length)
+                throw new ArgumentOutOfRangeException(nameof(index));
 
             // ReadSampleImpl "thinks" in bytes, so adjust accordingly
             return ReadSamplesImpl(buffer, index * sizeof(float), count * sizeof(float)) / sizeof(float);
         }
 
-        float[] _readBuf = new float[1152 * 2];
-        int _readBufLen, _readBufOfs;
+        private float[] _readBuf = new float[1152 * 2];
+        private int _readBufLen, _readBufOfs;
 
-        int ReadSamplesImpl(Array buffer, int index, int count)
+        private int ReadSamplesImpl(Array buffer, int index, int count)
         {
             var cnt = 0;
 
@@ -219,24 +201,23 @@ namespace NLayer
                     if (_readBufLen > _readBufOfs)
                     {
                         // we have bytes in the buffer, so copy them first
-                        var temp = _readBufLen - _readBufOfs;
-                        if (temp > count) temp = count;
-                        Buffer.BlockCopy(_readBuf, _readBufOfs, buffer, index, temp);
+                        int tmp = _readBufLen - _readBufOfs;
+                        if (tmp > count)
+                            tmp = count;
+                        Buffer.BlockCopy(_readBuf, _readBufOfs, buffer, index, tmp);
 
                         // now update our counters...
-                        cnt += temp;
+                        cnt += tmp;
 
-                        count -= temp;
-                        index += temp;
+                        count -= tmp;
+                        index += tmp;
 
-                        _position += temp;
-                        _readBufOfs += temp;
+                        _position += tmp;
+                        _readBufOfs += tmp;
 
                         // finally, mark the buffer as empty if we've read everything in it
                         if (_readBufOfs == _readBufLen)
-                        {
                             _readBufLen = 0;
-                        }
                     }
 
                     // if the buffer is empty, try to fill it
@@ -245,9 +226,7 @@ namespace NLayer
                     if (_readBufLen == 0)
                     {
                         if (_eofFound)
-                        {
                             break;
-                        }
 
                         // decode the next frame (update _readBufXXX)
                         var frame = _reader.NextFrame();
@@ -262,14 +241,14 @@ namespace NLayer
                             _readBufLen = _decoder.DecodeFrame(frame, _readBuf, 0) * sizeof(float);
                             _readBufOfs = 0;
                         }
-                        catch (System.IO.InvalidDataException)
+                        catch (InvalidDataException)
                         {
                             // bad frame...  try again...
                             _decoder.Reset();
                             _readBufOfs = _readBufLen = 0;
                             continue;
                         }
-                        catch (System.IO.EndOfStreamException)
+                        catch (EndOfStreamException)
                         {
                             // no more frames
                             _eofFound = true;
@@ -283,6 +262,18 @@ namespace NLayer
                 }
             }
             return cnt;
+        }
+
+        /// <summary>
+        /// Disposes underlying resources.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!_leaveOpen)
+            {
+                _stream.Dispose();
+                _leaveOpen = false;
+            }
         }
     }
 }

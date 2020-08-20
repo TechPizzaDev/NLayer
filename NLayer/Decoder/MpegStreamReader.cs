@@ -3,19 +3,17 @@ using System.IO;
 
 namespace NLayer.Decoder
 {
-    class MpegStreamReader
+    internal class MpegStreamReader
     {
-        ID3Frame _id3Frame, _id3v1Frame;
-        RiffHeaderFrame _riffHeaderFrame;
-
-        VBRInfo _vbrInfo;
-        MpegFrame _first, _current, _last, _lastFree;
-
-        long _readOffset, _eofOffset;
-        Stream _source;
-        bool _canSeek, _endFound, _mixedFrameSize;
-        object _readLock = new object();
-        object _frameLock = new object();
+        private ID3Frame _id3Frame, _id3v1Frame;
+        private RiffHeaderFrame _riffHeaderFrame;
+        private VBRInfo _vbrInfo;
+        private MpegFrame _first, _current, _last, _lastFree;
+        private long _readOffset, _eofOffset;
+        private Stream _source;
+        private bool _canSeek, _endFound, _mixedFrameSize;
+        private object _readLock = new object();
+        private object _frameLock = new object();
 
         internal MpegStreamReader(Stream source)
         {
@@ -27,27 +25,28 @@ namespace NLayer.Decoder
             // find the first Mpeg frame
             var frame = FindNextFrame();
             while (frame != null && !(frame is MpegFrame))
-            {
                 frame = FindNextFrame();
-            }
 
             // if we still don't have a frame, we never sync'ed
-            if (frame == null) throw new InvalidDataException("Not a valid MPEG file!");
+            if (frame == null)
+                throw new InvalidDataException("Not a valid MPEG file!");
 
             // the very next frame "should be" an mpeg frame
             frame = FindNextFrame();
 
             // if not, it's not a valid file
-            if (frame == null || !(frame is MpegFrame)) throw new InvalidDataException("Not a valid MPEG file!");
+            if (frame == null || !(frame is MpegFrame))
+                throw new InvalidDataException("Not a valid MPEG file!");
 
             // seek to the first frame
             _current = _first;
         }
 
-        FrameBase FindNextFrame()
+        private FrameBase FindNextFrame()
         {
             // if we've found the end, don't bother looking for anything else
-            if (_endFound) return null;
+            if (_endFound)
+                return null;
 
             var freeFrame = _lastFree;
             var lastFrameStart = _readOffset;
@@ -75,7 +74,8 @@ namespace NLayer.Decoder
                                 {
                                     if (f.Validate(_readOffset, this))
                                     {
-                                        if (!_canSeek) f.SaveBuffer();
+                                        if (!_canSeek)
+                                            f.SaveBuffer();
 
                                         _readOffset += f.Length;
                                         DiscardThrough(_readOffset, true);
@@ -164,7 +164,8 @@ namespace NLayer.Decoder
                                 {
                                     if (f.Validate(_readOffset, this))
                                     {
-                                        if (!_canSeek) f.SaveBuffer();
+                                        if (!_canSeek)
+                                            f.SaveBuffer();
 
                                         // if it's a v1 tag, go ahead and parse it
                                         if (f.Version == 1)
@@ -187,7 +188,8 @@ namespace NLayer.Decoder
 
                             // well, we didn't find anything, so rinse and repeat with the next byte
                             ++_readOffset;
-                            if (_first == null || !_canSeek) DiscardThrough(_readOffset, true);
+                            if (_first == null || !_canSeek)
+                                DiscardThrough(_readOffset, true);
                             Buffer.BlockCopy(syncBuf, 1, syncBuf, 0, 3);
                         } while (Read(_readOffset + 3, syncBuf, 3, 1) == 1);
                     }
@@ -221,14 +223,13 @@ namespace NLayer.Decoder
             }
         }
 
-        class ReadBuffer
+        private class ReadBuffer
         {
             public byte[] Data;
             public long BaseOffset;
             public int End;
             public int DiscardCount;
-
-            object _localLock = new object();
+            private object _localLock = new object();
 
             public ReadBuffer(int initialSize)
             {
@@ -242,7 +243,7 @@ namespace NLayer.Decoder
                 lock (_localLock)
                 {
                     var startIdx = EnsureFilled(reader, offset, ref count);
-                    
+
                     Buffer.BlockCopy(Data, startIdx, buffer, index, count);
                 }
                 return count;
@@ -262,7 +263,7 @@ namespace NLayer.Decoder
                 return -1;
             }
 
-            int EnsureFilled(MpegStreamReader reader, long offset, ref int count)
+            private int EnsureFilled(MpegStreamReader reader, long offset, ref int count)
             {
                 // if the offset & count are inside our buffer's range, just return the appropriate index
                 var startIdx = (int)(offset - BaseOffset);
@@ -277,7 +278,8 @@ namespace NLayer.Decoder
                     if (startIdx < 0)
                     {
                         // if we can't seek, there's nothing we can do
-                        if (!reader._source.CanSeek) throw new InvalidOperationException("Cannot seek backwards on a forward-only stream!");
+                        if (!reader._source.CanSeek)
+                            throw new InvalidOperationException("Cannot seek backwards on a forward-only stream!");
 
                         // if there's data in the buffer, try to keep it (up to doubling the buffer size)
                         if (End > 0)
@@ -495,17 +497,18 @@ namespace NLayer.Decoder
                     var count = (int)(offset - BaseOffset);
                     DiscardCount = Math.Max(count, DiscardCount);
 
-                    if (DiscardCount >= Data.Length) CommitDiscard();
+                    if (DiscardCount >= Data.Length)
+                        CommitDiscard();
                 }
             }
 
-            void Truncate()
+            private void Truncate()
             {
                 End = 0;
                 DiscardCount = 0;
             }
 
-            void CommitDiscard()
+            private void CommitDiscard()
             {
                 if (DiscardCount >= Data.Length || DiscardCount >= End)
                 {
@@ -525,22 +528,25 @@ namespace NLayer.Decoder
             }
         }
 
-        ReadBuffer _readBuf = new ReadBuffer(2048);
+        private ReadBuffer _readBuf = new ReadBuffer(2048);
 
         internal int Read(long offset, byte[] buffer, int index, int count)
         {
             // make sure the offset is at least positive
-            if (offset < 0L) throw new ArgumentOutOfRangeException("offset");
+            if (offset < 0L)
+                throw new ArgumentOutOfRangeException("offset");
 
             // make sure the buffer is valid
-            if (index < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException("index");
+            if (index < 0 || index + count > buffer.Length)
+                throw new ArgumentOutOfRangeException("index");
 
             return _readBuf.Read(this, offset, buffer, index, count);
         }
 
         internal int ReadByte(long offset)
         {
-            if (offset < 0L) throw new ArgumentOutOfRangeException("offset");
+            if (offset < 0L)
+                throw new ArgumentOutOfRangeException("offset");
 
             return _readBuf.ReadByte(this, offset);
         }
@@ -555,25 +561,8 @@ namespace NLayer.Decoder
         {
             try
             {
-                var maxAllocation = 40000;
-                if (_id3Frame != null)
-                {
-                    maxAllocation += _id3Frame.Length;
-                }
-
                 while (!_endFound)
-                {
                     FindNextFrame();
-
-                    while (!_canSeek && FrameBase.TotalAllocation >= maxAllocation)
-                    {
-#if NET35 
-                        System.Threading.Thread.Sleep(500);
-#else
-                        System.Threading.Tasks.Task.Delay(500).Wait(); //
-#endif
-                    }
-                }
             }
             catch (ObjectDisposedException)
             {
@@ -582,18 +571,17 @@ namespace NLayer.Decoder
         }
 
 
-        internal bool CanSeek
-        {
-            get { return _canSeek; }
-        }
+        internal bool CanSeek => _canSeek;
 
-        internal long SampleCount
+        internal long? SampleCount
         {
             get
             {
-                if (_vbrInfo != null) return _vbrInfo.VBRStreamSampleCount;
+                if (_vbrInfo != null)
+                    return _vbrInfo.VBRStreamSampleCount;
 
-                if (!_canSeek) return -1;
+                if (!_canSeek)
+                    return null;
 
                 ReadToEnd();
                 return _last.SampleCount + _last.SampleOffset;
@@ -604,7 +592,8 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_vbrInfo != null) return _vbrInfo.SampleRate;
+                if (_vbrInfo != null)
+                    return _vbrInfo.SampleRate;
                 return _first.SampleRate;
             }
         }
@@ -613,20 +602,19 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_vbrInfo != null) return _vbrInfo.Channels;
+                if (_vbrInfo != null)
+                    return _vbrInfo.Channels;
                 return _first.Channels;
             }
         }
 
-        internal int FirstFrameSampleCount
-        {
-            get { return (_first != null ? _first.SampleCount : 0); }
-        }
+        internal int FirstFrameSampleCount => (_first != null ? _first.SampleCount : 0);
 
 
         internal long SeekTo(long sampleNumber)
         {
-            if (!_canSeek) throw new InvalidOperationException("Cannot seek!");
+            if (!_canSeek)
+                throw new InvalidOperationException("Cannot seek!");
 
             // first try to "seek" by calculating the frame number
             var cnt = (int)(sampleNumber / _first.SampleCount);
@@ -670,7 +658,8 @@ namespace NLayer.Decoder
 
                 frame = frame.Next;
             }
-            if (frame == null) return -1;
+            if (frame == null)
+                return -1;
             return (_current = frame).SampleOffset;
         }
 
@@ -698,7 +687,8 @@ namespace NLayer.Decoder
 
                 if (!_canSeek)
                 {
-                    // if we're in a forward-only stream, don't bother keeping the frames that have already been processed
+                    // if we're in a forward-only stream, 
+                    // don't bother keeping the frames that have already been processed
                     lock (_frameLock)
                     {
                         var temp = _first;

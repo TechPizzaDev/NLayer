@@ -1,37 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace NLayer.Decoder
+﻿namespace NLayer.Decoder
 {
-    class ID3Frame : FrameBase
+    internal class ID3Frame : FrameBase
     {
         internal static ID3Frame TrySync(uint syncMark)
         {
             if ((syncMark & 0xFFFFFF00U) == 0x49443300)
-            {
                 return new ID3Frame { _version = 2 };
-            }
-
+            
             if ((syncMark & 0xFFFFFF00U) == 0x54414700)
             {
                 if ((syncMark & 0xFF) == 0x2B)
-                {
                     return new ID3Frame { _version = 1 };
-                }
                 else
-                {
                     return new ID3Frame { _version = 0 };
-                }
             }
 
             return null;
         }
 
-        int _version;
+        private int _version;
 
-        ID3Frame()
+        private ID3Frame()
         {
 
         }
@@ -51,9 +40,11 @@ namespace NLayer.Decoder
                             case 3:
                                 flagsMask = 0x1F;
                                 break;
+
                             case 4:
                                 flagsMask = 0x0F;
                                 break;
+
                             default:
                                 return -1;
                         }
@@ -67,14 +58,23 @@ namespace NLayer.Decoder
                                  | (buf[6]);
 
                         // finally, check to make sure that all the right bits are cleared
-                        if (!(((buf[2] & flagsMask) | (buf[3] & 0x80) | (buf[4] & 0x80) | (buf[5] & 0x80) | (buf[6] & 0x80)) != 0 || buf[1] == 0xFF))
+                        int flags = 
+                            (buf[2] & flagsMask) | 
+                            (buf[3] & 0x80) |
+                            (buf[4] & 0x80) | 
+                            (buf[5] & 0x80) | 
+                            (buf[6] & 0x80);
+
+                        if (!(flags != 0 || buf[1] == 0xFF))
                         {
                             return size + 10;   // don't forget the sync, flag & size bytes!
                         }
                     }
                     break;
+
                 case 1:
                     return 227 + 128;
+
                 case 0:
                     return 128;
             }
@@ -90,21 +90,24 @@ namespace NLayer.Decoder
                 case 2:
                     ParseV2();
                     break;
+
                 case 1:
                     ParseV1Enh();
                     break;
+
                 case 0:
                     ParseV1(3);
                     break;
             }
         }
 
-        void ParseV1(int offset)
+        private void ParseV1(int offset)
         {
             //var buffer = new byte[125];
             //if (Read(offset, buffer) == 125)
             //{
-            //    // v1 tags use ASCII encoding... For now we'll use the built-in encoding, but for Win8 we'll have to build our own.
+            //    // v1 tags use ASCII encoding... 
+            //    // For now we'll use the built-in encoding, but for Win8 we'll have to build our own.
             //    var encoding = Encoding.ASCII;
             //
             //    // title (30)
@@ -135,14 +138,15 @@ namespace NLayer.Decoder
             //}
         }
 
-        void ParseV1Enh()
+        private void ParseV1Enh()
         {
             ParseV1(230);
 
             //var buffer = new byte[223];
             //if (Read(4, buffer) == 223)
             //{
-            //    // v1 tags use ASCII encoding... For now we'll use the built-in encoding, but for Win8 we'll have to build our own.
+            //    // v1 tags use ASCII encoding... 
+            //    // For now we'll use the built-in encoding, but for Win8 we'll have to build our own.
             //    var encoding = Encoding.ASCII;
             //
             //    // title (60)
@@ -168,7 +172,7 @@ namespace NLayer.Decoder
             //}
         }
 
-        void ParseV2()
+        private void ParseV2()
         {
             // v2 is much more complicated than v1...  don't worry about it for now
             // look for any merged frames, as well
@@ -178,7 +182,8 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_version == 0) return 1;
+                if (_version == 0)
+                    return 1;
                 return _version;
             }
         }

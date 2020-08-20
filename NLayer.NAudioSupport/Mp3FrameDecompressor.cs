@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
+﻿
 namespace NLayer.NAudioSupport
 {
     public class Mp3FrameDecompressor : NAudio.Wave.IMp3FrameDecompressor
@@ -34,8 +30,8 @@ namespace NLayer.NAudioSupport
 
         public StereoMode StereoMode
         {
-            get { return _decoder.StereoMode; }
-            set { _decoder.StereoMode = value; }
+            get => _decoder.StereoMode;
+            set => _decoder.StereoMode = value;
         }
 
         public void Reset()

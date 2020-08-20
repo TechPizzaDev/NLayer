@@ -1392,10 +1392,9 @@ namespace NLayer.Decoder
             // count1 section
             h = _count1TableSelect[gr][ch] + 32;
 
-            float v, w;
             while (part3end > _bitRes.BitsRead && idx < SBLIMIT * SSLIMIT)
             {
-                Huffman.Decode(_bitRes, h, out x, out y, out v, out w);
+                Huffman.Decode(_bitRes, h, out x, out y, out float v, out float w);
                 _samples[ch][idx] = Dequantize(idx, v, gr, ch);
                 ++idx;
                 _samples[ch][idx] = Dequantize(idx, w, gr, ch);
@@ -1782,7 +1781,7 @@ namespace NLayer.Decoder
         {
             var k0 = _lsfRatio[scalefacCompress % 1][isPos][0];
             var k1 = _lsfRatio[scalefacCompress % 1][isPos][1];
-            if (StereoMode == NLayer.StereoMode.DownmixToMono)
+            if (StereoMode == StereoMode.DownmixToMono)
             {
                 var ratio = 1 / (k0 + k1);
                 for (; sb > 0; sb--, i++)
@@ -1824,7 +1823,7 @@ namespace NLayer.Decoder
 
         private void ApplyFullStereo(int i, int sb)
         {
-            if (StereoMode == NLayer.StereoMode.DownmixToMono)
+            if (StereoMode == StereoMode.DownmixToMono)
             {
                 for (; sb > 0; sb--, i++)
                 {

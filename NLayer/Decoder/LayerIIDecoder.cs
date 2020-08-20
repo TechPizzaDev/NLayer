@@ -8,19 +8,25 @@ namespace NLayer.Decoder
     // there's not much we have to do here... table selection, granule count, scalefactor selection
     internal class LayerIIDecoder : LayerIIDecoderBase
     {
-        static internal bool GetCRC(MpegFrame frame, ref uint crc)
+        public LayerIIDecoder() : base(_allocLookupTable, 3)
+        {
+        }
+
+        public static bool GetCRC(MpegFrame frame, ref uint crc)
         {
             return GetCRC(frame, SelectTable(frame), _allocLookupTable, true, ref crc);
         }
 
-        // figure out which rate table to use...  basically, high-rate full, high-rate limited, low-rate limited, low-rate minimal, and LSF.
+        // figure out which rate table to use...  
+        // basically, high-rate full, high-rate limited, low-rate limited, low-rate minimal, and LSF.
         private static int[] SelectTable(IMpegFrame frame)
         {
             var bitRatePerChannel = (frame.BitRate / (frame.ChannelMode == MpegChannelMode.Mono ? 1 : 2)) / 1000;
 
             if (frame.Version == MpegVersion.Version1)
             {
-                if ((bitRatePerChannel >= 56 && bitRatePerChannel <= 80) || (frame.SampleRate == 48000 && bitRatePerChannel >= 56))
+                if ((bitRatePerChannel >= 56 && bitRatePerChannel <= 80) ||
+                    (frame.SampleRate == 48000 && bitRatePerChannel >= 56))
                 {
                     return _rateLookupTable[0];   // high-rate, 27 subbands
                 }
@@ -67,8 +73,6 @@ namespace NLayer.Decoder
             new int[] { 4,  0, -5, -7,  3,-10,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14 }, // 6 (II)
             new int[] { 2,  0, -5, -7,  3 },                                                 // 7 (II, 4, 2 bits per alloc)
         };
-
-        internal LayerIIDecoder() : base(_allocLookupTable, 3) { }
 
         protected override int[] GetRateTable(IMpegFrame frame)
         {

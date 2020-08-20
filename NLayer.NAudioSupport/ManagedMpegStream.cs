@@ -1,41 +1,45 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using NAudio.Wave;
 using System.IO;
+using NAudio.Wave;
 
 namespace NLayer.NAudioSupport
 {
     public class ManagedMpegStream : WaveStream, IDisposable
     {
-        Stream _source;
-        WaveFormat _waveFormat;
-        MpegFile _fileDecoder;
-        bool _closeOnDispose;
+        private MpegFile _fileDecoder;
+        private WaveFormat _waveFormat;
+
+        public override WaveFormat WaveFormat => _waveFormat;
+
+        public override long Length => _fileDecoder.Length ?? throw new IOException("The stream is not seekable.");
+
+        public override long Position
+        {
+            get => _fileDecoder.Position;
+            set => _fileDecoder.Position = value;
+        }
+
+        public StereoMode StereoMode
+        {
+            get => _fileDecoder.StereoMode;
+            set => _fileDecoder.StereoMode = value;
+        }
 
         public ManagedMpegStream(string fileName)
-            : this(System.IO.File.OpenRead(fileName), true)
+            : this(File.OpenRead(fileName), false)
         {
 
         }
 
         public ManagedMpegStream(Stream source)
-            : this(source, false)
+            : this(source, true)
         {
         }
 
-        public ManagedMpegStream(Stream source, bool closeOnDispose)
+        public ManagedMpegStream(Stream source, bool leaveOpen)
         {
-            this._source = source;
-            this._closeOnDispose = closeOnDispose;
-            this._fileDecoder = new MpegFile(this._source);
-            this._waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(this._fileDecoder.SampleRate, this._fileDecoder.Channels);
-        }
-
-        public override WaveFormat WaveFormat
-        {
-            get { return _waveFormat; }
+            _fileDecoder = new MpegFile(source, leaveOpen);
+            _waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(_fileDecoder.SampleRate, _fileDecoder.Channels);
         }
 
         public void SetEQ(float[] eq)
@@ -43,45 +47,19 @@ namespace NLayer.NAudioSupport
             _fileDecoder.SetEQ(eq);
         }
 
-        public StereoMode StereoMode
-        {
-            get { return _fileDecoder.StereoMode; }
-            set { _fileDecoder.StereoMode = value; }
-        }
-
         public override int Read(byte[] buffer, int offset, int count)
         {
-            return this._fileDecoder.ReadSamples(buffer, offset, count);
+            return _fileDecoder.ReadSamples(buffer, offset, count);
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (_source != null)
+            if (_fileDecoder != null)
             {
-                if (_closeOnDispose)
-                {
-                    _source.Dispose();
-                }
-                _source = null;
+                _fileDecoder.Dispose();
+                _fileDecoder = null;
             }
             base.Dispose(disposing);
-        }
-
-        public override long Length
-        {
-            get { return this._fileDecoder.Length; }
-        }
-
-        public override long Position
-        {
-            get
-            {
-                return this._fileDecoder.Position;
-            }
-            set
-            {
-                this._fileDecoder.Position = value;
-            }
         }
     }
 }

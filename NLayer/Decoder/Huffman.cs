@@ -882,12 +882,10 @@ namespace NLayer.Decoder
         static byte DecodeSymbol(BitReservoir br, int table)
         {
             // get the huffman node for decoding
-            int maxBits;
-            var node = GetNode(table, out maxBits);
+            var node = GetNode(table, out int maxBits);
 
             // get some bits to work with
-            int readBits;
-            int bits = br.TryPeekBits(maxBits, out readBits);
+            int bits = br.TryPeekBits(maxBits, out int readBits);
             if (readBits < maxBits)
             {
                 bits <<= maxBits - readBits;
@@ -974,10 +972,9 @@ namespace NLayer.Decoder
                     var bits = 0;
                     var len = 0;
                     var idx = i;
-                    int bit;
                     do
                     {
-                        idx = FindPreviousNode(tree, idx, out bit);
+                        idx = FindPreviousNode(tree, idx, out int bit);
                         bits |= bit << len++;
                     } while (idx > 0);
 

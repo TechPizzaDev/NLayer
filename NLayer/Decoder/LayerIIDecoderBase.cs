@@ -14,7 +14,7 @@ namespace NLayer.Decoder
     {
         protected const int SSLIMIT = 12;
 
-        static protected bool GetCRC(
+        protected static bool GetCRC(
             MpegFrame frame, int[] rateTable, int[][] allocLookupTable, bool readScfsiBits, ref uint crc)
         {
             // ugh...  we basically have to re-implement the allocation logic here.
@@ -400,7 +400,7 @@ namespace NLayer.Decoder
                 }
             }
 
-            if (_channels == 2 && StereoMode == NLayer.StereoMode.DownmixToMono)
+            if (_channels == 2 && StereoMode == StereoMode.DownmixToMono)
             {
                 for (int i = 0; i < idx; i++)
                 {

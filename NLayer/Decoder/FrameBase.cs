@@ -2,20 +2,18 @@
 
 namespace NLayer.Decoder
 {
-    abstract class FrameBase
+    internal abstract class FrameBase
     {
-        static int _totalAllocation = 0;
-        static internal int TotalAllocation
-        {
-            get { return System.Threading.Interlocked.CompareExchange(ref _totalAllocation, 0, 0); }
-        }
+        private static int _totalAllocation = 0;
+
+        static internal int TotalAllocation =>
+            System.Threading.Interlocked.CompareExchange(ref _totalAllocation, 0, 0);
 
         internal long Offset { get; private set; }
         internal int Length { get; set; }
 
-        MpegStreamReader _reader;
-
-        byte[] _savedBuffer;
+        private MpegStreamReader _reader;
+        private byte[] _savedBuffer;
 
         protected FrameBase() { }
 
@@ -43,9 +41,12 @@ namespace NLayer.Decoder
         {
             if (_savedBuffer != null)
             {
-                if (index < 0 || index + count > buffer.Length) return 0;   // check against caller's buffer
-                if (offset < 0 || offset >= _savedBuffer.Length) return 0;  // check against saved buffer
-                if (offset + count > _savedBuffer.Length) count = _savedBuffer.Length - index;  // twiddle the size as needed
+                if (index < 0 || index + count > buffer.Length)
+                    return 0;   // check against caller's buffer
+                if (offset < 0 || offset >= _savedBuffer.Length)
+                    return 0;  // check against saved buffer
+                if (offset + count > _savedBuffer.Length)
+                    count = _savedBuffer.Length - index;  // twiddle the size as needed
 
                 Array.Copy(_savedBuffer, offset, buffer, index, count);
                 return count;
@@ -60,10 +61,12 @@ namespace NLayer.Decoder
         {
             if (_savedBuffer != null)
             {
-                if (offset < 0) throw new ArgumentOutOfRangeException();
-                if (offset >= _savedBuffer.Length) return -1;
+                if (offset < 0)
+                    throw new ArgumentOutOfRangeException();
+                if (offset >= _savedBuffer.Length)
+                    return -1;
 
-                return (int)_savedBuffer[offset];
+                return _savedBuffer[offset];
             }
             else
             {
@@ -93,6 +96,8 @@ namespace NLayer.Decoder
         /// <summary>
         /// Called when the stream is not "seek-able"
         /// </summary>
-        virtual internal void Parse() { }
+        virtual internal void Parse()
+        {
+        }
     }
 }
