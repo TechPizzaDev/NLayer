@@ -82,17 +82,21 @@ namespace NLayer.Decoder
         // this is from the formula: 1 / (1 - (1f / (1 << Bits)))
         // index by bits
         private static readonly float[] _C = {
-            0.00000000000f,
-            0.00000000000f, 1.33333333333f, 1.14285714286f, 1.06666666666f, 1.03225806452f, 1.01587301587f, 1.00787401575f, 1.00392156863f,
-            1.00195694716f, 1.00097751711f, 1.00048851979f, 1.00024420024f, 1.00012208522f, 1.00006103888f, 1.00003051851f, 1.00001525902f
+            0.00000000000f, 0.00000000000f, 1.33333333333f, 1.14285714286f,
+            1.06666666666f, 1.03225806452f, 1.01587301587f, 1.00787401575f,
+            1.00392156863f, 1.00195694716f, 1.00097751711f, 1.00048851979f,
+            1.00024420024f, 1.00012208522f, 1.00006103888f, 1.00003051851f,
+            1.00001525902f
         };
 
         // this is from the formula: 1f / (1 << Bits - 1) - 1
         // index by bits
         private static readonly float[] _D = {
-            0.00000000000f - 0f,
-            0.00000000000f - 0f, 0.50000000000f - 1f, 0.25000000000f - 1f, 0.12500000000f - 1f, 0.062500000000f - 1f, 0.03125000000f - 1f, 0.01562500000f - 1f, 0.00781250000f - 1f,
-            0.00390625000f - 1f, 0.00195312500f - 1f, 0.00097656250f - 1f, 0.00048828125f - 1f, 0.000244140630f - 1f, 0.00012207031f - 1f, 0.00006103516f - 1f, 0.00003051758f - 1f
+            0.00000000000f - 0f, 0.00000000000f - 0f, 0.50000000000f - 1f, 0.25000000000f - 1f,
+            0.12500000000f - 1f, 0.062500000000f - 1f, 0.03125000000f - 1f, 0.01562500000f - 1f,
+            0.00781250000f - 1f, 0.00390625000f - 1f, 0.00195312500f - 1f, 0.00097656250f - 1f,
+            0.00048828125f - 1f, 0.000244140630f - 1f, 0.00012207031f - 1f, 0.00006103516f - 1f,
+            0.00003051758f - 1f
         };
 
         // this is from a (really annoying) formula:
@@ -101,14 +105,22 @@ namespace NLayer.Decoder
         //   [0] = Math.Pow(4, 1 / 2), [1] = Math.Pow(4, 1 / 3), [2] = Math.Pow(4, 1 / 6)
         //   For every remaining element, calculate (in order): [idx] = [idx - 3] / 2
         private static readonly float[] _denormalMultiplier = {
-            2.00000000000000f, 1.58740105196820f, 1.25992104989487f, 1.00000000000000f, 0.79370052598410f, 0.62996052494744f, 0.50000000000000f, 0.39685026299205f,
-            0.31498026247372f, 0.25000000000000f, 0.19842513149602f, 0.15749013123686f, 0.12500000000000f, 0.09921256574801f, 0.07874506561843f, 0.06250000000000f,
-            0.04960628287401f, 0.03937253280921f, 0.03125000000000f, 0.02480314143700f, 0.01968626640461f, 0.01562500000000f, 0.01240157071850f, 0.00984313320230f,
-            0.00781250000000f, 0.00620078535925f, 0.00492156660115f, 0.00390625000000f, 0.00310039267963f, 0.00246078330058f, 0.00195312500000f, 0.00155019633981f,
-            0.00123039165029f, 0.00097656250000f, 0.00077509816991f, 0.00061519582514f, 0.00048828125000f, 0.00038754908495f, 0.00030759791257f, 0.00024414062500f,
-            0.00019377454248f, 0.00015379895629f, 0.00012207031250f, 0.00009688727124f, 0.00007689947814f, 0.00006103515625f, 0.00004844363562f, 0.00003844973907f,
-            0.00003051757813f, 0.00002422181781f, 0.00001922486954f, 0.00001525878906f, 0.00001211090890f, 0.00000961243477f, 0.00000762939453f, 0.00000605545445f,
-            0.00000480621738f, 0.00000381469727f, 0.00000302772723f, 0.00000240310869f, 0.00000190734863f, 0.00000151386361f, 0.00000120155435f, 0.00000095367432f
+            2.00000000000000f, 1.58740105196820f, 1.25992104989487f, 1.00000000000000f,
+            0.79370052598410f, 0.62996052494744f, 0.50000000000000f, 0.39685026299205f,
+            0.31498026247372f, 0.25000000000000f, 0.19842513149602f, 0.15749013123686f,
+            0.12500000000000f, 0.09921256574801f, 0.07874506561843f, 0.06250000000000f,
+            0.04960628287401f, 0.03937253280921f, 0.03125000000000f, 0.02480314143700f,
+            0.01968626640461f, 0.01562500000000f, 0.01240157071850f, 0.00984313320230f,
+            0.00781250000000f, 0.00620078535925f, 0.00492156660115f, 0.00390625000000f,
+            0.00310039267963f, 0.00246078330058f, 0.00195312500000f, 0.00155019633981f,
+            0.00123039165029f, 0.00097656250000f, 0.00077509816991f, 0.00061519582514f,
+            0.00048828125000f, 0.00038754908495f, 0.00030759791257f, 0.00024414062500f,
+            0.00019377454248f, 0.00015379895629f, 0.00012207031250f, 0.00009688727124f,
+            0.00007689947814f, 0.00006103515625f, 0.00004844363562f, 0.00003844973907f,
+            0.00003051757813f, 0.00002422181781f, 0.00001922486954f, 0.00001525878906f,
+            0.00001211090890f, 0.00000961243477f, 0.00000762939453f, 0.00000605545445f,
+            0.00000480621738f, 0.00000381469727f, 0.00000302772723f, 0.00000240310869f,
+            0.00000190734863f, 0.00000151386361f, 0.00000120155435f, 0.00000095367432f
         };
 
         #endregion
@@ -143,12 +155,15 @@ namespace NLayer.Decoder
             _polyPhaseBuf = new float[SBLIMIT];
         }
 
+        protected abstract int[] GetRateTable(IMpegFrame frame);
+
+        protected abstract void ReadScaleFactorSelection(IMpegFrame frame, int[][] scfsi, int channels);
+
         public override int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             InitFrame(frame);
 
-            var rateTable = GetRateTable(frame);
-
+            int[] rateTable = GetRateTable(frame);
             ReadAllocation(frame, rateTable);
 
             for (int i = 0; i < _scfsi[0].Length; i++)
@@ -190,10 +205,6 @@ namespace NLayer.Decoder
             }
         }
 
-        abstract protected int[] GetRateTable(IMpegFrame frame);
-
-        abstract protected void ReadScaleFactorSelection(IMpegFrame frame, int[][] scfsi, int channels);
-
         private void ReadAllocation(IMpegFrame frame, int[] rateTable)
         {
             var _subBandCount = rateTable.Length;
@@ -206,16 +217,15 @@ namespace NLayer.Decoder
             int sb = 0;
             for (; sb < _jsbound; sb++)
             {
-                var table = _allocLookupTable[rateTable[sb]];
-                var bits = table[0];
+                int[] table = _allocLookupTable[rateTable[sb]];
+                int bits = table[0];
+
                 for (int ch = 0; ch < _channels; ch++)
-                {
                     _allocation[ch][sb] = table[frame.ReadBits(bits) + 1];
-                }
             }
             for (; sb < _subBandCount; sb++)
             {
-                var table = _allocLookupTable[rateTable[sb]];
+                int[] table = _allocLookupTable[rateTable[sb]];
                 _allocation[0][sb] = _allocation[1][sb] = table[frame.ReadBits(table[0]) + 1];
             }
         }
@@ -279,14 +289,14 @@ namespace NLayer.Decoder
                     {
                         if (ch == 0 || sb < _jsbound)
                         {
-                            var alloc = _allocation[ch][sb];
+                            int alloc = _allocation[ch][sb];
                             if (alloc != 0)
                             {
                                 if (alloc < 0)
                                 {
                                     // grouping (Layer II only, so we don't have to play with the granule count)
-                                    var val = frame.ReadBits(-alloc);
-                                    var levels = (1 << (-alloc / 2 + -alloc % 2 - 1)) + 1;
+                                    int val = frame.ReadBits(-alloc);
+                                    int levels = (1 << (-alloc / 2 + -alloc % 2 - 1)) + 1;
 
                                     _samples[ch][idx] = val % levels;
                                     val /= levels;
@@ -297,27 +307,21 @@ namespace NLayer.Decoder
                                 {
                                     // non-grouping
                                     for (int gr = 0; gr < _granuleCount; gr++)
-                                    {
                                         _samples[ch][idx + SBLIMIT * gr] = frame.ReadBits(alloc);
-                                    }
                                 }
                             }
                             else
                             {
                                 // no energy...  zero out the samples
                                 for (int gr = 0; gr < _granuleCount; gr++)
-                                {
                                     _samples[ch][idx + SBLIMIT * gr] = 0;
-                                }
                             }
                         }
                         else
                         {
                             // copy chan 0 to chan 1
                             for (int gr = 0; gr < _granuleCount; gr++)
-                            {
                                 _samples[1][idx + SBLIMIT * gr] = _samples[0][idx + SBLIMIT * gr];
-                            }
                         }
                     }
                 }
@@ -362,10 +366,10 @@ namespace NLayer.Decoder
                             // NB: Layers I & II use the same algorithm here...  
                             //     Grouping changes the bit counts, but doesn't change the algo
                             //     - Up to 65534 possible values (65535 does not appear to be usable)
-                            //     - All values can be handled with 16-bit logic as long as the correct C and D constants are used
+                            //     - All values can be handled with 16-bit logic with the correct C and D constants
                             //     - Make sure to normalize each sample to 16 bits!
 
-                            var alloc = _allocation[channelIndex][sb];
+                            int alloc = _allocation[channelIndex][sb];
                             if (alloc != 0)
                             {
                                 float[] c, d;
@@ -406,9 +410,7 @@ namespace NLayer.Decoder
             if (_channels == 2 && StereoMode == StereoMode.DownmixToMono)
             {
                 for (int i = 0; i < idx; i++)
-                {
                     ch0[i] = (ch0[i] + ch1[i]) / 2;
-                }
             }
 
             return idx;
