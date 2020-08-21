@@ -36,11 +36,13 @@ using System.Collections.Generic;
 namespace NLayer.Decoder
 {
     /// <summary>
-    /// Class Implementing Layer 3 Decoder.
+    /// Class Implementing Layer III Decoder.
     /// </summary>
     internal sealed class LayerIIIDecoder : LayerDecoderBase
     {
         private const int SSLIMIT = 18;
+
+        private const float sqrt32 = 0.8660254037844385965883020617184229195117950439453125f;
 
         #region Child Classes
 
@@ -160,66 +162,56 @@ namespace NLayer.Decoder
                 _prevBlock[channel] = nextBlock;
             }
 
-            internal void Apply(float[] fsIn, int channel, int blockType, bool doMixed)
+            internal void Apply(Span<float> fsIn, int channel, int blockType, bool doMixed)
             {
                 // get the previous & next blocks so we can overlap correctly
                 //  NB: we swap each pass so we can add the previous block in a single pass
-                GetPrevBlock(channel, out float[] prevblck, out float[] nextblck);
+                GetPrevBlock(channel, out float[] prevBlock, out float[] nextBlock);
 
                 // now we have a few options for processing blocks...
                 int start = 0;
                 if (doMixed)
                 {
                     // a mixed block always has the first two subbands as blocktype 0
-                    LongImpl(fsIn, 0, 2, nextblck, 0);
+                    LongImpl(fsIn, 0, 2, nextBlock, 0);
                     start = 2;
                 }
 
                 if (blockType == 2)
-                {
                     // this is the only place we care about short blocks
-                    ShortImpl(fsIn, start, nextblck);
-                }
+                    ShortImpl(fsIn, start, nextBlock);
                 else
-                {
-                    LongImpl(fsIn, start, SBLIMIT, nextblck, blockType);
-                }
+                    LongImpl(fsIn, start, SBLIMIT, nextBlock, blockType);
 
                 // overlap
                 for (int i = 0; i < SSLIMIT * SBLIMIT; i++)
-                {
-                    fsIn[i] += prevblck[i];
-                }
+                    fsIn[i] += prevBlock[i];
             }
 
-            private float[] _imdctTemp = new float[SSLIMIT];
-            private float[] _imdctResult = new float[SSLIMIT * 2];
-
-            private void LongImpl(float[] fsIn, int sbStart, int sbLimit, float[] nextblck, int blockType)
+            private void LongImpl(
+                Span<float> fsIn, int sbStart, int sbLimit, Span<float> nextBlock, int blockType)
             {
+                Span<float> imdctResult = stackalloc float[SSLIMIT * 2];
+
                 for (int sb = sbStart, ofs = sbStart * SSLIMIT; sb < sbLimit; sb++)
                 {
                     // IMDCT
-                    Array.Copy(fsIn, ofs, _imdctTemp, 0, SSLIMIT);
-                    LongIMDCT(_imdctTemp, _imdctResult);
+                    LongIMDCT(fsIn.Slice(ofs, SSLIMIT), imdctResult);
 
                     // window
                     var win = _swin[blockType];
                     int i = 0;
                     for (; i < SSLIMIT; i++)
-                    {
-                        fsIn[ofs++] = _imdctResult[i] * win[i];
-                    }
+                        fsIn[ofs++] = imdctResult[i] * win[i];
+
                     ofs -= SSLIMIT;
 
                     for (; i < SSLIMIT * 2; i++)
-                    {
-                        nextblck[ofs++] = _imdctResult[i] * win[i];
-                    }
+                        nextBlock[ofs++] = imdctResult[i] * win[i];
                 }
             }
 
-            private static void LongIMDCT(float[] invec, float[] outvec)
+            private static void LongIMDCT(ReadOnlySpan<float> invec, Span<float> outvec)
             {
                 Span<float> H = stackalloc float[17];
                 Span<float> h = stackalloc float[18];
@@ -241,8 +233,8 @@ namespace NLayer.Decoder
                     odd[i] = H[idx] + H[idx + 2];
                 }
 
-                imdct_9pt(even, even_idct);
-                imdct_9pt(odd, odd_idct);
+                Imdct_9pt(even, even_idct);
+                Imdct_9pt(odd, odd_idct);
 
                 for (i = 0; i < 9; i++)
                 {
@@ -296,18 +288,15 @@ namespace NLayer.Decoder
                 return icos72_table[4 * i + 1];
             }
 
-            private static void imdct_9pt(ReadOnlySpan<float> invec, Span<float> outvec)
+            private static void Imdct_9pt(ReadOnlySpan<float> invec, Span<float> outvec)
             {
                 Span<float> even_idct = stackalloc float[5];
                 Span<float> odd_idct = stackalloc float[4];
 
-                int i;
-                float t0, t1, t2;
-
                 /* BEGIN 5 Point IMDCT */
-                t0 = invec[6] / 2.0f + invec[0];
-                t1 = invec[0] - invec[6];
-                t2 = invec[2] - invec[4] - invec[8];
+                float t0 = invec[6] / 2.0f + invec[0];
+                float t1 = invec[0] - invec[6];
+                float t2 = invec[2] - invec[4] - invec[8];
 
                 even_idct[0] = t0 + invec[2] * 0.939692621f
                     + invec[4] * 0.766044443f + invec[8] * 0.173648178f;
@@ -348,21 +337,20 @@ namespace NLayer.Decoder
                 odd_idct[2] *= 0.5f / 0.64278761f;
                 odd_idct[3] *= 0.5f / 0.342020143f;
 
+                int i;
                 for (i = 0; i < 4; i++)
-                {
                     outvec[i] = even_idct[i] + odd_idct[i];
-                }
                 outvec[4] = even_idct[4];
+
                 /* Mirror into the other half of the vector */
                 for (i = 5; i < 9; i++)
-                {
                     outvec[i] = even_idct[8 - i] - odd_idct[8 - i];
-                }
             }
 
-            private void ShortImpl(float[] fsIn, int sbStart, float[] nextblck)
+            private void ShortImpl(Span<float> fsIn, int sbStart, Span<float> nextBlock)
             {
-                var win = _swin[2];
+                Span<float> imdctTmp = stackalloc float[SSLIMIT];
+                Span<float> imdctResult = stackalloc float[SSLIMIT * 2];
 
                 for (int sb = sbStart, ofs = sbStart * SSLIMIT; sb < SBLIMIT; sb++, ofs += SSLIMIT)
                 {
@@ -372,7 +360,7 @@ namespace NLayer.Decoder
                         var v = ofs + i;
                         for (int j = 0; j < 6; j++)
                         {
-                            _imdctTemp[tmpptr + j] = fsIn[v];
+                            imdctTmp[tmpptr + j] = fsIn[v];
                             v += 3;
                         }
                         tmpptr += 6;
@@ -380,52 +368,50 @@ namespace NLayer.Decoder
 
                     // short blocks are fun...  3 separate IMDCT's with overlap in two different buffers
 
-                    Array.Clear(fsIn, ofs, 6);
+                    fsIn.Slice(ofs, 6).Clear();
 
                     // do the first 6 samples
-                    ShortIMDCT(_imdctTemp, 0, _imdctResult);
-                    Array.Copy(_imdctResult, 0, fsIn, ofs + 6, 12);
+                    ShortIMDCT(imdctTmp, 0, imdctResult);
+                    imdctResult.Slice(0, 12).CopyTo(fsIn.Slice(ofs + 6));
 
                     // now the next 6
-                    ShortIMDCT(_imdctTemp, 6, _imdctResult);
+                    ShortIMDCT(imdctTmp, 6, imdctResult);
                     for (int i = 0; i < 6; i++)
                     {
                         // add the first half to tsOut
-                        fsIn[ofs + i + 12] += _imdctResult[i];
+                        fsIn[ofs + i + 12] += imdctResult[i];
                     }
-                    Array.Copy(_imdctResult, 6, nextblck, ofs, 6);
+                    imdctResult.Slice(6, 6).CopyTo(nextBlock.Slice(ofs));
 
-                    // now the final 6
-                    ShortIMDCT(_imdctTemp, 12, _imdctResult);
+                    // now the f    inal 6
+                    ShortIMDCT(imdctTmp, 12, imdctResult);
                     for (int i = 0; i < 6; i++)
                     {
-                        // add the first half to nextblck
-                        nextblck[ofs + i] += _imdctResult[i];
+                        // add the first half to nextBlock
+                        nextBlock[ofs + i] += imdctResult[i];
                     }
-                    Array.Copy(_imdctResult, 6, nextblck, ofs + 6, 6);
-                    Array.Clear(nextblck, ofs + 12, 6);
+                    imdctResult.Slice(6, 6).CopyTo(nextBlock.Slice(ofs + 6));
+                    nextBlock.Slice(ofs + 12, 6).Clear();
                 }
             }
 
-            private const float sqrt32 = 0.8660254037844385965883020617184229195117950439453125f;
-
-            private static void ShortIMDCT(float[] invec, int inIdx, float[] outvec)
+            private static void ShortIMDCT(ReadOnlySpan<float> invec, int inIdx, Span<float> outvec)
             {
                 Span<float> H = stackalloc float[6];
                 Span<float> h = stackalloc float[6];
                 Span<float> even_idct = stackalloc float[3];
                 Span<float> odd_idct = stackalloc float[3];
 
-                int i;
-                float t0, t1, t2;
-
                 /* Preprocess the input to the two 3-point IDCT's */
-                var idx = inIdx;
+                int idx = inIdx;
+                int i;
                 for (i = 1; i < 6; i++)
                 {
                     H[i] = invec[idx];
                     H[i] += invec[++idx];
                 }
+
+                float t0, t1, t2;
 
                 /* 3-point IMDCT */
                 t0 = H[4] / 2.0f + invec[inIdx];
@@ -512,7 +498,7 @@ namespace NLayer.Decoder
             // load the frame's main data
             if (!_bitRes.AddBits(frame, _mainDataBegin))
                 return 0;
-            
+
             // prep the reusable tables
             PrepTables(frame);
 
@@ -529,7 +515,7 @@ namespace NLayer.Decoder
             else if (StereoMode == StereoMode.RightOnly)
             {
                 // this is correct... if there's only a single channel output, it goes in channel 0's buffer
-                channelMapping[1] = 0;  
+                channelMapping[1] = 0;
                 startChannel = 1;
             }
             else    // MpegStereoMode.Both
@@ -576,10 +562,10 @@ namespace NLayer.Decoder
                 for (int channelIndex = startChannel; channelIndex <= endChannel; channelIndex++)
                 {
                     // pull some values so we don't have to index them again later
-                    var buf = _samples[channelIndex];
-                    var blockType = _blockType[gr][channelIndex];
-                    var blockSplit = _blockSplitFlag[gr][channelIndex];
-                    var mixedBlock = _mixedBlockFlag[gr][channelIndex];
+                    Span<float> buf = _samples[channelIndex].AsSpan();
+                    int blockType = _blockType[gr][channelIndex];
+                    bool blockSplit = _blockSplitFlag[gr][channelIndex];
+                    bool mixedBlock = _mixedBlockFlag[gr][channelIndex];
 
                     // do the short/long/mixed logic here so it's only done once per channel per granule
                     if (blockSplit && blockType == 2)
@@ -652,38 +638,70 @@ namespace NLayer.Decoder
 
         private static float[] GAIN_TAB =
         {
-            1.57009245868378E-16f, 1.86716512307887E-16f, 2.22044604925031E-16f, 2.64057024024816E-16f, 3.14018491736756E-16f, 3.73433024615774E-16f, 4.44089209850063E-16f, 5.28114048049630E-16f,
-            6.28036983473509E-16f, 7.46866049231544E-16f, 8.88178419700125E-16f, 1.05622809609926E-15f, 1.25607396694702E-15f, 1.49373209846309E-15f, 1.77635683940025E-15f, 2.11245619219853E-15f,
-            2.51214793389404E-15f, 2.98746419692619E-15f, 3.55271367880050E-15f, 4.22491238439706E-15f, 5.02429586778810E-15f, 5.97492839385238E-15f, 7.10542735760100E-15f, 8.44982476879408E-15f,
-            1.00485917355761E-14f, 1.19498567877047E-14f, 1.42108547152020E-14f, 1.68996495375882E-14f, 2.00971834711523E-14f, 2.38997135754094E-14f, 2.84217094304040E-14f, 3.37992990751764E-14f,
-            4.01943669423047E-14f, 4.77994271508190E-14f, 5.68434188608080E-14f, 6.75985981503528E-14f, 8.03887338846093E-14f, 9.55988543016378E-14f, 1.13686837721616E-13f, 1.35197196300706E-13f,
-            1.60777467769219E-13f, 1.91197708603275E-13f, 2.27373675443232E-13f, 2.70394392601411E-13f, 3.21554935538437E-13f, 3.82395417206551E-13f, 4.54747350886464E-13f, 5.40788785202823E-13f,
-            6.43109871076876E-13f, 7.64790834413101E-13f, 9.09494701772928E-13f, 1.08157757040564E-12f, 1.28621974215375E-12f, 1.52958166882621E-12f, 1.81898940354586E-12f, 2.16315514081129E-12f,
-            2.57243948430750E-12f, 3.05916333765241E-12f, 3.63797880709171E-12f, 4.32631028162258E-12f, 5.14487896861500E-12f, 6.11832667530482E-12f, 7.27595761418343E-12f, 8.65262056324518E-12f,
-            1.02897579372300E-11f, 1.22366533506096E-11f, 1.45519152283669E-11f, 1.73052411264903E-11f, 2.05795158744600E-11f, 2.44733067012193E-11f, 2.91038304567337E-11f, 3.46104822529806E-11f,
-            4.11590317489199E-11f, 4.89466134024385E-11f, 5.82076609134674E-11f, 6.92209645059613E-11f, 8.23180634978400E-11f, 9.78932268048772E-11f, 1.16415321826935E-10f, 1.38441929011922E-10f,
-            1.64636126995680E-10f, 1.95786453609754E-10f, 2.32830643653870E-10f, 2.76883858023845E-10f, 3.29272253991360E-10f, 3.91572907219509E-10f, 4.65661287307739E-10f, 5.53767716047690E-10f,
-            6.58544507982719E-10f, 7.83145814439016E-10f, 9.31322574615479E-10f, 1.10753543209538E-09f, 1.31708901596544E-09f, 1.56629162887804E-09f, 1.86264514923096E-09f, 2.21507086419076E-09f,
-            2.63417803193088E-09f, 3.13258325775607E-09f, 3.72529029846191E-09f, 4.43014172838152E-09f, 5.26835606386176E-09f, 6.26516651551212E-09f, 7.45058059692383E-09f, 8.86028345676304E-09f,
-            1.05367121277235E-08f, 1.25303330310243E-08f, 1.49011611938477E-08f, 1.77205669135261E-08f, 2.10734242554471E-08f, 2.50606660620485E-08f, 2.98023223876953E-08f, 3.54411338270521E-08f,
-            4.21468485108941E-08f, 5.01213321240971E-08f, 5.96046447753906E-08f, 7.08822676541044E-08f, 8.42936970217880E-08f, 1.00242664248194E-07f, 1.19209289550781E-07f, 1.41764535308209E-07f,
-            1.68587394043576E-07f, 2.00485328496388E-07f, 2.38418579101562E-07f, 2.83529070616417E-07f, 3.37174788087152E-07f, 4.00970656992777E-07f, 4.76837158203125E-07f, 5.67058141232835E-07f,
-            6.74349576174305E-07f, 8.01941313985553E-07f, 9.53674316406250E-07f, 1.13411628246567E-06f, 1.34869915234861E-06f, 1.60388262797110E-06f, 1.90734863281250E-06f, 2.26823256493134E-06f,
-            2.69739830469722E-06f, 3.20776525594221E-06f, 3.81469726562500E-06f, 4.53646512986268E-06f, 5.39479660939444E-06f, 6.41553051188442E-06f, 7.62939453125000E-06f, 9.07293025972536E-06f,
-            1.07895932187889E-05f, 1.28310610237688E-05f, 1.52587890625000E-05f, 1.81458605194507E-05f, 2.15791864375777E-05f, 2.56621220475377E-05f, 3.05175781250000E-05f, 3.62917210389014E-05f,
-            4.31583728751555E-05f, 5.13242440950754E-05f, 6.10351562500000E-05f, 7.25834420778029E-05f, 8.63167457503110E-05f, 1.02648488190151E-04f, 1.22070312500000E-04f, 1.45166884155606E-04f,
-            1.72633491500622E-04f, 2.05296976380301E-04f, 2.44140625000000E-04f, 2.90333768311211E-04f, 3.45266983001244E-04f, 4.10593952760603E-04f, 4.88281250000000E-04f, 5.80667536622423E-04f,
-            6.90533966002488E-04f, 8.21187905521206E-04f, 9.76562500000000E-04f, 1.16133507324485E-03f, 1.38106793200498E-03f, 1.64237581104241E-03f, 1.95312500000000E-03f, 2.32267014648969E-03f,
-            2.76213586400995E-03f, 3.28475162208482E-03f, 3.90625000000000E-03f, 4.64534029297938E-03f, 5.52427172801990E-03f, 6.56950324416964E-03f, 7.81250000000000E-03f, 9.29068058595876E-03f,
-            1.10485434560398E-02f, 1.31390064883393E-02f, 1.56250000000000E-02f, 1.85813611719175E-02f, 2.20970869120796E-02f, 2.62780129766786E-02f, 3.12500000000000E-02f, 3.71627223438350E-02f,
-            4.41941738241592E-02f, 5.25560259533572E-02f, 6.25000000000000E-02f, 7.43254446876701E-02f, 8.83883476483184E-02f, 1.05112051906714E-01f, 1.25000000000000E-01f, 1.48650889375340E-01f,
-            1.76776695296637E-01f, 2.10224103813429E-01f, 2.50000000000000E-01f, 2.97301778750680E-01f, 3.53553390593274E-01f, 4.20448207626857E-01f, 5.00000000000000E-01f, 5.94603557501361E-01f,
-            7.07106781186547E-01f, 8.40896415253715E-01f, 1.00000000000000E+00f, 1.18920711500272E+00f, 1.41421356237310E+00f, 1.68179283050743E+00f, 2.00000000000000E+00f, 2.37841423000544E+00f,
-            2.82842712474619E+00f, 3.36358566101486E+00f, 4.00000000000000E+00f, 4.75682846001088E+00f, 5.65685424949238E+00f, 6.72717132202972E+00f, 8.00000000000000E+00f, 9.51365692002177E+00f,
-            1.13137084989848E+01f, 1.34543426440594E+01f, 1.60000000000000E+01f, 1.90273138400435E+01f, 2.26274169979695E+01f, 2.69086852881189E+01f, 3.20000000000000E+01f, 3.80546276800871E+01f,
-            4.52548339959390E+01f, 5.38173705762377E+01f, 6.40000000000000E+01f, 7.61092553601742E+01f, 9.05096679918781E+01f, 1.07634741152475E+02f, 1.28000000000000E+02f, 1.52218510720348E+02f,
-            1.81019335983756E+02f, 2.15269482304951E+02f, 2.56000000000000E+02f, 3.04437021440696E+02f, 3.62038671967512E+02f, 4.30538964609902E+02f, 5.12000000000000E+02f, 6.08874042881393E+02f,
-            7.24077343935025E+02f, 8.61077929219803E+02f, 1.02400000000000E+03f, 1.21774808576279E+03f, 1.44815468787005E+03f, 1.72215585843961E+03f, 2.04800000000000E+03f, 2.43549617152557E+03f,
+            1.57009245868378E-16f, 1.86716512307887E-16f, 2.22044604925031E-16f, 2.64057024024816E-16f,
+            3.14018491736756E-16f, 3.73433024615774E-16f, 4.44089209850063E-16f, 5.28114048049630E-16f,
+            6.28036983473509E-16f, 7.46866049231544E-16f, 8.88178419700125E-16f, 1.05622809609926E-15f,
+            1.25607396694702E-15f, 1.49373209846309E-15f, 1.77635683940025E-15f, 2.11245619219853E-15f,
+            2.51214793389404E-15f, 2.98746419692619E-15f, 3.55271367880050E-15f, 4.22491238439706E-15f,
+            5.02429586778810E-15f, 5.97492839385238E-15f, 7.10542735760100E-15f, 8.44982476879408E-15f,
+            1.00485917355761E-14f, 1.19498567877047E-14f, 1.42108547152020E-14f, 1.68996495375882E-14f,
+            2.00971834711523E-14f, 2.38997135754094E-14f, 2.84217094304040E-14f, 3.37992990751764E-14f,
+            4.01943669423047E-14f, 4.77994271508190E-14f, 5.68434188608080E-14f, 6.75985981503528E-14f,
+            8.03887338846093E-14f, 9.55988543016378E-14f, 1.13686837721616E-13f, 1.35197196300706E-13f,
+            1.60777467769219E-13f, 1.91197708603275E-13f, 2.27373675443232E-13f, 2.70394392601411E-13f,
+            3.21554935538437E-13f, 3.82395417206551E-13f, 4.54747350886464E-13f, 5.40788785202823E-13f,
+            6.43109871076876E-13f, 7.64790834413101E-13f, 9.09494701772928E-13f, 1.08157757040564E-12f,
+            1.28621974215375E-12f, 1.52958166882621E-12f, 1.81898940354586E-12f, 2.16315514081129E-12f,
+            2.57243948430750E-12f, 3.05916333765241E-12f, 3.63797880709171E-12f, 4.32631028162258E-12f,
+            5.14487896861500E-12f, 6.11832667530482E-12f, 7.27595761418343E-12f, 8.65262056324518E-12f,
+            1.02897579372300E-11f, 1.22366533506096E-11f, 1.45519152283669E-11f, 1.73052411264903E-11f,
+            2.05795158744600E-11f, 2.44733067012193E-11f, 2.91038304567337E-11f, 3.46104822529806E-11f,
+            4.11590317489199E-11f, 4.89466134024385E-11f, 5.82076609134674E-11f, 6.92209645059613E-11f,
+            8.23180634978400E-11f, 9.78932268048772E-11f, 1.16415321826935E-10f, 1.38441929011922E-10f,
+            1.64636126995680E-10f, 1.95786453609754E-10f, 2.32830643653870E-10f, 2.76883858023845E-10f,
+            3.29272253991360E-10f, 3.91572907219509E-10f, 4.65661287307739E-10f, 5.53767716047690E-10f,
+            6.58544507982719E-10f, 7.83145814439016E-10f, 9.31322574615479E-10f, 1.10753543209538E-09f,
+            1.31708901596544E-09f, 1.56629162887804E-09f, 1.86264514923096E-09f, 2.21507086419076E-09f,
+            2.63417803193088E-09f, 3.13258325775607E-09f, 3.72529029846191E-09f, 4.43014172838152E-09f,
+            5.26835606386176E-09f, 6.26516651551212E-09f, 7.45058059692383E-09f, 8.86028345676304E-09f,
+            1.05367121277235E-08f, 1.25303330310243E-08f, 1.49011611938477E-08f, 1.77205669135261E-08f,
+            2.10734242554471E-08f, 2.50606660620485E-08f, 2.98023223876953E-08f, 3.54411338270521E-08f,
+            4.21468485108941E-08f, 5.01213321240971E-08f, 5.96046447753906E-08f, 7.08822676541044E-08f,
+            8.42936970217880E-08f, 1.00242664248194E-07f, 1.19209289550781E-07f, 1.41764535308209E-07f,
+            1.68587394043576E-07f, 2.00485328496388E-07f, 2.38418579101562E-07f, 2.83529070616417E-07f,
+            3.37174788087152E-07f, 4.00970656992777E-07f, 4.76837158203125E-07f, 5.67058141232835E-07f,
+            6.74349576174305E-07f, 8.01941313985553E-07f, 9.53674316406250E-07f, 1.13411628246567E-06f,
+            1.34869915234861E-06f, 1.60388262797110E-06f, 1.90734863281250E-06f, 2.26823256493134E-06f,
+            2.69739830469722E-06f, 3.20776525594221E-06f, 3.81469726562500E-06f, 4.53646512986268E-06f,
+            5.39479660939444E-06f, 6.41553051188442E-06f, 7.62939453125000E-06f, 9.07293025972536E-06f,
+            1.07895932187889E-05f, 1.28310610237688E-05f, 1.52587890625000E-05f, 1.81458605194507E-05f,
+            2.15791864375777E-05f, 2.56621220475377E-05f, 3.05175781250000E-05f, 3.62917210389014E-05f,
+            4.31583728751555E-05f, 5.13242440950754E-05f, 6.10351562500000E-05f, 7.25834420778029E-05f,
+            8.63167457503110E-05f, 1.02648488190151E-04f, 1.22070312500000E-04f, 1.45166884155606E-04f,
+            1.72633491500622E-04f, 2.05296976380301E-04f, 2.44140625000000E-04f, 2.90333768311211E-04f,
+            3.45266983001244E-04f, 4.10593952760603E-04f, 4.88281250000000E-04f, 5.80667536622423E-04f,
+            6.90533966002488E-04f, 8.21187905521206E-04f, 9.76562500000000E-04f, 1.16133507324485E-03f,
+            1.38106793200498E-03f, 1.64237581104241E-03f, 1.95312500000000E-03f, 2.32267014648969E-03f,
+            2.76213586400995E-03f, 3.28475162208482E-03f, 3.90625000000000E-03f, 4.64534029297938E-03f,
+            5.52427172801990E-03f, 6.56950324416964E-03f, 7.81250000000000E-03f, 9.29068058595876E-03f,
+            1.10485434560398E-02f, 1.31390064883393E-02f, 1.56250000000000E-02f, 1.85813611719175E-02f,
+            2.20970869120796E-02f, 2.62780129766786E-02f, 3.12500000000000E-02f, 3.71627223438350E-02f,
+            4.41941738241592E-02f, 5.25560259533572E-02f, 6.25000000000000E-02f, 7.43254446876701E-02f,
+            8.83883476483184E-02f, 1.05112051906714E-01f, 1.25000000000000E-01f, 1.48650889375340E-01f,
+            1.76776695296637E-01f, 2.10224103813429E-01f, 2.50000000000000E-01f, 2.97301778750680E-01f,
+            3.53553390593274E-01f, 4.20448207626857E-01f, 5.00000000000000E-01f, 5.94603557501361E-01f,
+            7.07106781186547E-01f, 8.40896415253715E-01f, 1.00000000000000E+00f, 1.18920711500272E+00f,
+            1.41421356237310E+00f, 1.68179283050743E+00f, 2.00000000000000E+00f, 2.37841423000544E+00f,
+            2.82842712474619E+00f, 3.36358566101486E+00f, 4.00000000000000E+00f, 4.75682846001088E+00f,
+            5.65685424949238E+00f, 6.72717132202972E+00f, 8.00000000000000E+00f, 9.51365692002177E+00f,
+            1.13137084989848E+01f, 1.34543426440594E+01f, 1.60000000000000E+01f, 1.90273138400435E+01f,
+            2.26274169979695E+01f, 2.69086852881189E+01f, 3.20000000000000E+01f, 3.80546276800871E+01f,
+            4.52548339959390E+01f, 5.38173705762377E+01f, 6.40000000000000E+01f, 7.61092553601742E+01f,
+            9.05096679918781E+01f, 1.07634741152475E+02f, 1.28000000000000E+02f, 1.52218510720348E+02f,
+            1.81019335983756E+02f, 2.15269482304951E+02f, 2.56000000000000E+02f, 3.04437021440696E+02f,
+            3.62038671967512E+02f, 4.30538964609902E+02f, 5.12000000000000E+02f, 6.08874042881393E+02f,
+            7.24077343935025E+02f, 8.61077929219803E+02f, 1.02400000000000E+03f, 1.21774808576279E+03f,
+            1.44815468787005E+03f, 1.72215585843961E+03f, 2.04800000000000E+03f, 2.43549617152557E+03f,
         };
 
         #endregion
@@ -740,15 +758,13 @@ namespace NLayer.Decoder
                             _tableSelect[gr][ch][0] = frame.ReadBits(5);
                             _tableSelect[gr][ch][1] = frame.ReadBits(5);
                             _tableSelect[gr][ch][2] = 0;
+
                             // set the region information
                             if (_blockType[gr][ch] == 2 && !_mixedBlockFlag[gr][ch])
-                            {
                                 _regionAddress1[gr][ch] = 8;
-                            }
                             else
-                            {
                                 _regionAddress1[gr][ch] = 7;
-                            }
+
                             _regionAddress2[gr][ch] = 20 - _regionAddress1[gr][ch];
                             //   subblock_gain[gr][ch][0..2]     3 x3
                             _subblockGain[gr][ch][0] = frame.ReadBits(3) * -2f;
@@ -822,15 +838,13 @@ namespace NLayer.Decoder
                         _tableSelect[gr][ch][0] = frame.ReadBits(5);
                         _tableSelect[gr][ch][1] = frame.ReadBits(5);
                         _tableSelect[gr][ch][2] = 0;
+
                         // set the region information
                         if (_blockType[gr][ch] == 2 && !_mixedBlockFlag[gr][ch])
-                        {
                             _regionAddress1[gr][ch] = 8;
-                        }
                         else
-                        {
                             _regionAddress1[gr][ch] = 7;
-                        }
+
                         _regionAddress2[gr][ch] = 20 - _regionAddress1[gr][ch];
                         //   subblock_gain[gr][ch][0..2]     3 x3
                         _subblockGain[gr][ch][0] = frame.ReadBits(3) * -2f;
@@ -872,8 +886,11 @@ namespace NLayer.Decoder
         private int[] _sfBandIndexL, _sfBandIndexS;
 
         // these are byte[] to save memory
-        private byte[] _cbLookupL = new byte[SSLIMIT * SBLIMIT], _cbLookupS = new byte[SSLIMIT * SBLIMIT], _cbwLookupS = new byte[SSLIMIT * SBLIMIT];
+        private byte[] _cbLookupL = new byte[SSLIMIT * SBLIMIT];
+        private byte[] _cbLookupS = new byte[SSLIMIT * SBLIMIT];
+        private byte[] _cbwLookupS = new byte[SSLIMIT * SBLIMIT];
         private int _cbLookupSR;
+
         private static readonly int[][] _sfBandIndexLTable = {
             // MPEG 1
             // 44.1 kHz
@@ -897,9 +914,11 @@ namespace NLayer.Decoder
             // 12 kHz
             new int[] { 0, 6, 12, 18, 24, 30, 36, 44, 54, 66, 80, 96, 116, 140, 168, 200, 238, 284, 336, 396, 464, 522, 576 },
             // 8 kHz
-            new int[] { 0, 12, 24, 36, 48, 60, 72, 88, 108, 132, 160, 192, 232, 280, 336, 400, 476, 566, 568, 570, 572, 574, 576 },
+            new int[] {
+                0, 12, 24, 36, 48, 60, 72, 88, 108, 132, 160, 192, 232, 280, 336, 400, 476, 566, 568, 570, 572, 574, 576
+            },
         };
-       
+
         private static readonly int[][] _sfBandIndexSTable = {
             // MPEG 1
             // 44.1 kHz
@@ -981,14 +1000,16 @@ namespace NLayer.Decoder
                 {
                     if (i == next_cbL)
                     {
-                        ++cbL;
+                        cbL++;
                         next_cbL = _sfBandIndexL[cbL + 1];
                     }
+
                     if (i == next_cbS)
                     {
-                        ++cbS;
+                        cbS++;
                         next_cbS = _sfBandIndexS[cbS + 1] * 3;
                     }
+
                     _cbLookupL[i] = (byte)cbL;
                     _cbLookupS[i] = (byte)cbS;
                 }
@@ -997,13 +1018,11 @@ namespace NLayer.Decoder
                 int idx = 0;
                 for (cbS = 0; cbS < 12; cbS++)
                 {
-                    var width = _sfBandIndexS[cbS + 1] - _sfBandIndexS[cbS];
-                    for (int i = 0; i < 3; i++)
+                    int width = _sfBandIndexS[cbS + 1] - _sfBandIndexS[cbS];
+                    for (byte i = 0; i < 3; i++)
                     {
                         for (int j = 0; j < width; j++, idx++)
-                        {
-                            _cbwLookupS[idx] = (byte)i;
-                        }
+                            _cbwLookupS[idx] = i;
                     }
                 }
 
@@ -1040,8 +1059,8 @@ namespace NLayer.Decoder
 
         private int ReadScalefactors(int gr, int ch)
         {
-            var slen0 = _slen[0][_scalefacCompress[gr][ch]];
-            var slen1 = _slen[1][_scalefacCompress[gr][ch]];
+            int slen0 = _slen[0][_scalefacCompress[gr][ch]];
+            int slen1 = _slen[1][_scalefacCompress[gr][ch]];
             int bits;
 
             int cb = 0;
@@ -1055,9 +1074,8 @@ namespace NLayer.Decoder
                     {
                         // mixed has bands 0..7 of long, then 3..11 of short
                         for (; cb < 8; cb++)
-                        {
                             _scalefac[ch][3][cb] = _bitRes.GetBits(slen0);
-                        }
+
                         cb = 3;
                         bits -= slen0;  // mixed blocks need slen0 fewer bits
                     }
@@ -1072,10 +1090,10 @@ namespace NLayer.Decoder
                 }
                 else
                 {
-                    Array.Clear(_scalefac[ch][3], 0, 8);
                     Array.Clear(_scalefac[ch][0], 0, 6);
                     Array.Clear(_scalefac[ch][1], 0, 6);
                     Array.Clear(_scalefac[ch][2], 0, 6);
+                    Array.Clear(_scalefac[ch][3], 0, 8);
                     bits = 0;
                 }
 
@@ -1333,14 +1351,22 @@ namespace NLayer.Decoder
 
         private static readonly float[] POW2_TAB =
         {
-            1.000000000000000E-00f, 7.071067811865470E-01f, 5.000000000000000E-01f, 3.535533905932740E-01f, 2.500000000000000E-01f, 1.767766952966370E-01f, 1.250000000000000E-01f, 8.838834764831840E-02f,
-            6.250000000000000E-02f, 4.419417382415920E-02f, 3.125000000000000E-02f, 2.209708691207960E-02f, 1.562500000000000E-02f, 1.104854345603980E-02f, 7.812500000000000E-03f, 5.524271728019900E-03f,
-            3.906250000000000E-03f, 2.762135864009950E-03f, 1.953125000000000E-03f, 1.381067932004980E-03f, 9.765625000000000E-04f, 6.905339660024880E-04f, 4.882812500000000E-04f, 3.452669830012440E-04f,
-            2.441406250000000E-04f, 1.726334915006220E-04f, 1.220703125000000E-04f, 8.631674575031100E-05f, 6.103515625000000E-05f, 4.315837287515550E-05f, 3.051757812500000E-05f, 2.157918643757770E-05f,
-            1.525878906250000E-05f, 1.078959321878890E-05f, 7.629394531250000E-06f, 5.394796609394440E-06f, 3.814697265625000E-06f, 2.697398304697220E-06f, 1.907348632812500E-06f, 1.348699152348610E-06f,
-            9.536743164062500E-07f, 6.743495761743050E-07f, 4.768371582031250E-07f, 3.371747880871520E-07f, 2.384185791015620E-07f, 1.685873940435760E-07f, 1.192092895507810E-07f, 8.429369702178800E-08f,
-            5.960464477539060E-08f, 4.214684851089410E-08f, 2.980232238769530E-08f, 2.107342425544710E-08f, 1.490116119384770E-08f, 1.053671212772350E-08f, 7.450580596923830E-09f, 5.268356063861760E-09f,
-            3.725290298461910E-09f, 2.634178031930880E-09f, 1.862645149230960E-09f, 1.317089015965440E-09f, 9.313225746154790E-10f, 6.585445079827190E-10f, 4.656612873077390E-10f, 3.292722539913600E-10f,
+            1.000000000000000E-00f, 7.071067811865470E-01f, 5.000000000000000E-01f, 3.535533905932740E-01f,
+            2.500000000000000E-01f, 1.767766952966370E-01f, 1.250000000000000E-01f, 8.838834764831840E-02f,
+            6.250000000000000E-02f, 4.419417382415920E-02f, 3.125000000000000E-02f, 2.209708691207960E-02f,
+            1.562500000000000E-02f, 1.104854345603980E-02f, 7.812500000000000E-03f, 5.524271728019900E-03f,
+            3.906250000000000E-03f, 2.762135864009950E-03f, 1.953125000000000E-03f, 1.381067932004980E-03f,
+            9.765625000000000E-04f, 6.905339660024880E-04f, 4.882812500000000E-04f, 3.452669830012440E-04f,
+            2.441406250000000E-04f, 1.726334915006220E-04f, 1.220703125000000E-04f, 8.631674575031100E-05f,
+            6.103515625000000E-05f, 4.315837287515550E-05f, 3.051757812500000E-05f, 2.157918643757770E-05f,
+            1.525878906250000E-05f, 1.078959321878890E-05f, 7.629394531250000E-06f, 5.394796609394440E-06f,
+            3.814697265625000E-06f, 2.697398304697220E-06f, 1.907348632812500E-06f, 1.348699152348610E-06f,
+            9.536743164062500E-07f, 6.743495761743050E-07f, 4.768371582031250E-07f, 3.371747880871520E-07f,
+            2.384185791015620E-07f, 1.685873940435760E-07f, 1.192092895507810E-07f, 8.429369702178800E-08f,
+            5.960464477539060E-08f, 4.214684851089410E-08f, 2.980232238769530E-08f, 2.107342425544710E-08f,
+            1.490116119384770E-08f, 1.053671212772350E-08f, 7.450580596923830E-09f, 5.268356063861760E-09f,
+            3.725290298461910E-09f, 2.634178031930880E-09f, 1.862645149230960E-09f, 1.317089015965440E-09f,
+            9.313225746154790E-10f, 6.585445079827190E-10f, 4.656612873077390E-10f, 3.292722539913600E-10f,
         };
 
         private void ReadSamples(int sfBits, int gr, int ch)
@@ -1357,7 +1383,7 @@ namespace NLayer.Decoder
                 region2Start = _sfBandIndexL[Math.Min(_regionAddress1[gr][ch] + _regionAddress2[gr][ch] + 2, 22)];
             }
 
-            var part3end = _bitRes.BitsRead - sfBits + _part23Length[gr][ch];
+            long part3end = _bitRes.BitsRead - sfBits + _part23Length[gr][ch];
 
             int idx = 0, h = _tableSelect[gr][ch][0];
 
@@ -1373,6 +1399,7 @@ namespace NLayer.Decoder
                 ++idx;
             }
             h = _tableSelect[gr][ch][1];
+
             while (idx < bigValueCount && idx < region2Start)
             {
                 Huffman.Decode(_bitRes, h, out x, out y);
@@ -1382,6 +1409,7 @@ namespace NLayer.Decoder
                 ++idx;
             }
             h = _tableSelect[gr][ch][2];
+
             while (idx < bigValueCount)
             {
                 Huffman.Decode(_bitRes, h, out x, out y);
@@ -1418,45 +1446,39 @@ namespace NLayer.Decoder
             }
 
             if (_bitRes.BitsRead < part3end)
-            {
                 _bitRes.SkipBits((int)(part3end - _bitRes.BitsRead));
-            }
 
             // zero out the highest samples (defined as 0 in the standard)
             if (idx < SBLIMIT * SSLIMIT)
-            {
                 Array.Clear(_samples[ch], idx, SBLIMIT * SSLIMIT + 3 - idx);
-            }
         }
 
         private float Dequantize(int idx, float val, int gr, int ch)
         {
-            if (val != 0f)
+            if (val == 0f)
+                return 0f;
+
+            if (_blockSplitFlag[gr][ch] &&
+                _blockType[gr][ch] == 2 &&
+                !(_mixedBlockFlag[gr][ch] && idx < _sfBandIndexL[8]))
             {
-                int cb, window;
+                // short / mixed short section
+                int cb = _cbLookupS[idx];
+                int window = _cbwLookupS[idx];
 
-                if (_blockSplitFlag[gr][ch] && _blockType[gr][ch] == 2 && !(_mixedBlockFlag[gr][ch] && idx < _sfBandIndexL[8]))
-                {
-                    // short / mixed short section
-                    cb = _cbLookupS[idx];
-                    window = _cbwLookupS[idx];
-
-                    return
-                        val * _globalGain[gr][ch] *
-                        POW2_TAB[(int)(-2 * (_subblockGain[gr][ch][window] - (_scalefacScale[gr][ch] * _scalefac[ch][window][cb])))];
-                }
-                else
-                {
-                    // long / mixed long section
-                    cb = _cbLookupL[idx];
-
-                    return
-                        val * _globalGain[gr][ch] *
-                        POW2_TAB[(int)(2 * _scalefacScale[gr][ch] * (_scalefac[ch][3][cb] + _preflag[gr][ch] * PRETAB[cb]))];
-                }
-
+                return
+                    val * _globalGain[gr][ch] *
+                    POW2_TAB[(int)(-2 * (_subblockGain[gr][ch][window] - (_scalefacScale[gr][ch] * _scalefac[ch][window][cb])))];
             }
-            return 0f;
+            else
+            {
+                // long / mixed long section
+                int cb = _cbLookupL[idx];
+
+                return
+                    val * _globalGain[gr][ch] *
+                    POW2_TAB[(int)(2 * _scalefacScale[gr][ch] * (_scalefac[ch][3][cb] + _preflag[gr][ch] * PRETAB[cb]))];
+            }
         }
 
         #endregion
@@ -1471,13 +1493,29 @@ namespace NLayer.Decoder
         private static readonly float[][][] _lsfRatio = {   // sfc%2, ch, isPos
             new float[][]
             {
-                new float[] { 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f, 0.0625000000027179f },
-                new float[] { 1f, 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f },
+                new float[] {
+                    1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f, 0.500000000005436f,
+                    1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f, 0.250000000005436f,
+                    1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f, 0.125000000004077f,
+                    1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f, 0.0625000000027179f },
+                new float[] {
+                    1f, 1f, 0.840896415256f, 1f, 0.707106781190391f, 1f, 0.594603557506209f, 1f,
+                    0.500000000005436f, 1f, 0.420448207632571f, 1f, 0.353553390599039f, 1f, 0.297301778756337f, 1f,
+                    0.250000000005436f, 1f, 0.210224103818571f, 1f, 0.176776695301441f, 1f, 0.148650889379784f, 1f,
+                    0.125000000004077f, 1f, 0.105112051910428f, 1f, 0.0883883476516816f, 1f, 0.0743254446907002f, 1f },
             },
             new float[][]
             {
-                new float[] { 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f, 0.00390625000012838f },
-                new float[] { 1f, 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f },
+                new float[] {
+                    1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f, 0.250000000002054f,
+                    1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f, 0.062500000001027f,
+                    1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f, 0.0156250000003851f,
+                    1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f, 0.00390625000012838f },
+                new float[] {
+                    1f, 1f, 0.707106781188f, 1f, 0.500000000002054f, 1f, 0.353553390595452f, 1f,
+                    0.250000000002054f, 1f, 0.176776695298452f, 1f, 0.125000000001541f, 1f, 0.0883883476495893f, 1f,
+                    0.062500000001027f, 1f, 0.0441941738249762f, 1f, 0.0312500000006419f, 1f, 0.0220970869125789f, 1f,
+                    0.0156250000003851f, 1f, 0.0110485434563348f, 1f, 0.00781250000022466f, 1f, 0.00552427172819011f, 1f },
             },
         };
 
@@ -1517,9 +1555,7 @@ namespace NLayer.Decoder
                         {
                             // 0 through 8 of long, then 3 through 12 of short
                             if (lastValueIdx < _sfBandIndexL[8])
-                            {
                                 lEnd = 8;
-                            }
                             sStart = 3;
                         }
                         else
@@ -1551,13 +1587,9 @@ namespace NLayer.Decoder
                     if (sfb > 0 && sStart == -1)
                     {
                         if (midSide)
-                        {
                             ApplyMidSide(0, _sfBandIndexL[sfb]);
-                        }
                         else
-                        {
                             ApplyFullStereo(0, _sfBandIndexL[sfb]);
-                        }
                     }
 
                     // now process the intensity bands
@@ -1569,13 +1601,9 @@ namespace NLayer.Decoder
                         if (isPos == 7)
                         {
                             if (midSide)
-                            {
                                 ApplyMidSide(i, width);
-                            }
                             else
-                            {
                                 ApplyFullStereo(i, width);
-                            }
                         }
                         else if (lsf)
                         {
@@ -1594,17 +1622,14 @@ namespace NLayer.Decoder
                         if (isPos == 7)
                         {
                             if (midSide)
-                            {
                                 ApplyMidSide(_sfBandIndexL[21], 576 - _sfBandIndexL[21]);
-                            }
                             else
-                            {
                                 ApplyFullStereo(_sfBandIndexL[21], 576 - _sfBandIndexL[21]);
-                            }
                         }
                         else if (lsf)
                         {
-                            ApplyLsfIStereo(_sfBandIndexL[21], 576 - _sfBandIndexL[21], isPos, _scalefacCompress[gr][0]);
+                            ApplyLsfIStereo(
+                                _sfBandIndexL[21], 576 - _sfBandIndexL[21], isPos, _scalefacCompress[gr][0]);
                         }
                         else
                         {
@@ -1642,9 +1667,7 @@ namespace NLayer.Decoder
                             if (sSfb[window] != -1)
                             {
                                 if (sSfb[0] != -1 && sSfb[1] != -1 && sSfb[2] != -1)
-                                {
                                     break;
-                                }
                                 continue;
                             }
 
@@ -1661,9 +1684,7 @@ namespace NLayer.Decoder
                             }
 
                             if (window == 0)
-                            {
-                                --sfb;
-                            }
+                                sfb--;
                         }
 
                         // now apply the intensity processing for each window & scalefactor band
@@ -1681,13 +1702,9 @@ namespace NLayer.Decoder
                                     if (isPos == 7)
                                     {
                                         if (midSide)
-                                        {
                                             ApplyMidSide(i, width);
-                                        }
                                         else
-                                        {
                                             ApplyFullStereo(i, width);
-                                        }
                                     }
                                     else if (lsf)
                                     {
@@ -1719,17 +1736,14 @@ namespace NLayer.Decoder
                             if (isPos == 7)
                             {
                                 if (midSide)
-                                {
                                     ApplyMidSide(_sfBandIndexS[11] * 3 + finalWidth * window, finalWidth);
-                                }
                                 else
-                                {
                                     ApplyFullStereo(_sfBandIndexS[11] * 3 + finalWidth * window, finalWidth);
-                                }
                             }
                             else if (lsf)
                             {
-                                ApplyLsfIStereo(_sfBandIndexS[11] * 3 + finalWidth * window, finalWidth, isPos, _scalefacCompress[gr][0]);
+                                ApplyLsfIStereo(
+                                    _sfBandIndexS[11] * 3 + finalWidth * window, finalWidth, isPos, _scalefacCompress[gr][0]);
                             }
                             else
                             {
@@ -1838,17 +1852,17 @@ namespace NLayer.Decoder
 
         #region Reorder
 
-        private float[] _reorderBuf = new float[SBLIMIT * SSLIMIT];
-
-        private void Reorder(float[] buf, bool mixedBlock)
+        private void Reorder(Span<float> buf, bool mixedBlock)
         {
-            // reorder into _reorderBuf, then copy back
+            Span<float> reorderBuf = stackalloc float[SBLIMIT * SSLIMIT];
+
+            // reorder into reorderBuf, then copy back
             int sfb = 0;
 
             if (mixedBlock)
             {
                 // mixed... copy the first two bands and reorder the rest
-                Array.Copy(buf, 0, _reorderBuf, 0, SSLIMIT * 2);
+                buf.Slice(0, SSLIMIT * 2).CopyTo(reorderBuf);
 
                 sfb = 3;
             }
@@ -1864,14 +1878,14 @@ namespace NLayer.Decoder
                     {
                         var src_line = sfb_start * 3 + window * sfb_lines + freq;
                         var des_line = (sfb_start * 3) + window + (freq * 3);
-                        _reorderBuf[des_line] = buf[src_line];
+                        reorderBuf[des_line] = buf[src_line];
                     }
                 }
 
-                ++sfb;
+                sfb++;
             }
 
-            Array.Copy(_reorderBuf, buf, SSLIMIT * SBLIMIT);
+            reorderBuf.CopyTo(buf);
         }
 
         #endregion
@@ -1888,7 +1902,7 @@ namespace NLayer.Decoder
             -0.09457419252642070f, -0.04096558288530410f, -0.01419856857247120f, -0.00369997467376004f,
         };
 
-        private void AntiAlias(float[] buf, bool mixedBlock)
+        private void AntiAlias(Span<float> buf, bool mixedBlock)
         {
             int sblim;
             if (mixedBlock)
@@ -1904,8 +1918,8 @@ namespace NLayer.Decoder
             {
                 for (int ss = 0, buOfs = offset + SSLIMIT - 1, bdOfs = offset + SSLIMIT; ss < 8; ss++, buOfs--, bdOfs++)
                 {
-                    var bu = buf[buOfs];
-                    var bd = buf[bdOfs];
+                    float bu = buf[buOfs];
+                    float bd = buf[bdOfs];
                     buf[buOfs] = (bu * _scs[ss]) - (bd * _sca[ss]);
                     buf[bdOfs] = (bd * _scs[ss]) + (bu * _sca[ss]);
                 }
@@ -1916,7 +1930,7 @@ namespace NLayer.Decoder
 
         #region Frequency Inversion
 
-        private void FrequencyInversion(float[] buf)
+        private void FrequencyInversion(Span<float> buf)
         {
             for (int ss = 1; ss < SSLIMIT; ss += 2)
             {
@@ -1940,7 +1954,7 @@ namespace NLayer.Decoder
             {
                 for (int sb = 0; sb < SBLIMIT; sb++)
                     polyPhase[sb] = source[sb * SSLIMIT + ss];
-                
+
                 InversePolyPhase(ch, polyPhase);
                 polyPhase.CopyTo(dst.Slice(ofs));
             }
