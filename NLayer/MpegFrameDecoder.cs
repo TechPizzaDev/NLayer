@@ -4,9 +4,9 @@ namespace NLayer
 {
     public class MpegFrameDecoder
     {
-        private Decoder.LayerIDecoder _layerIDecoder;
-        private Decoder.LayerIIDecoder _layerIIDecoder;
-        private Decoder.LayerIIIDecoder _layerIIIDecoder;
+        private Decoder.Layer1Decoder _layerIDecoder;
+        private Decoder.Layer2Decoder _layerIIDecoder;
+        private Decoder.Layer3Decoder _layerIIIDecoder;
         private float[] _eqFactors;
 
         // channel buffers for getting data out of the decoders...
@@ -120,19 +120,19 @@ namespace NLayer
             {
                 case MpegLayer.LayerI:
                     if (_layerIDecoder == null)
-                        _layerIDecoder = new Decoder.LayerIDecoder();
+                        _layerIDecoder = new Decoder.Layer1Decoder();
                     decoder = _layerIDecoder;
                     break;
 
                 case MpegLayer.LayerII:
                     if (_layerIIDecoder == null)
-                        _layerIIDecoder = new Decoder.LayerIIDecoder();
+                        _layerIIDecoder = new Decoder.Layer2Decoder();
                     decoder = _layerIIDecoder;
                     break;
 
                 case MpegLayer.LayerIII:
                     if (_layerIIIDecoder == null)
-                        _layerIIIDecoder = new Decoder.LayerIIIDecoder();
+                        _layerIIIDecoder = new Decoder.Layer3Decoder();
                     decoder = _layerIIIDecoder;
                     break;
 

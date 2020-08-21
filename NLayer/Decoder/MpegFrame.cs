@@ -211,13 +211,13 @@ namespace NLayer.Decoder
             switch (Layer)
             {
                 case MpegLayer.LayerI:
-                    apply = LayerIDecoder.GetCRC(this, ref crc);
+                    apply = Layer1Decoder.GetCRC(this, ref crc);
                     break;
                 case MpegLayer.LayerII:
-                    apply = LayerIIDecoder.GetCRC(this, ref crc);
+                    apply = Layer2Decoder.GetCRC(this, ref crc);
                     break;
                 case MpegLayer.LayerIII:
-                    apply = LayerIIIDecoder.GetCRC(this, ref crc);
+                    apply = Layer3Decoder.GetCRC(this, ref crc);
                     break;
             }
 
@@ -238,9 +238,7 @@ namespace NLayer.Decoder
                 var carry = crc & 0x8000;
                 crc <<= 1;
                 if ((carry == 0) ^ ((data & masking) == 0))
-                {
                     crc ^= 0x8005;
-                }
             }
             crc &= 0xFFFF;
         }
@@ -252,33 +250,25 @@ namespace NLayer.Decoder
             // Xing first
             int offset;
             if (Version == MpegVersion.Version1 && ChannelMode != MpegChannelMode.Mono)
-            {
                 offset = 32 + 4;
-            }
             else if (Version > MpegVersion.Version1 && ChannelMode == MpegChannelMode.Mono)
-            {
                 offset = 9 + 4;
-            }
             else
-            {
                 offset = 17 + 4;
-            }
 
             if (Read(offset, buf) != 4)
                 return null;
-            if (buf[0] == 'X' && buf[1] == 'i' && buf[2] == 'n' && buf[3] == 'g'
-             || buf[0] == 'I' && buf[1] == 'n' && buf[2] == 'f' && buf[3] == 'o')
-            {
+
+            if (buf[0] == 'X' && buf[1] == 'i' && buf[2] == 'n' && buf[3] == 'g' ||
+                buf[0] == 'I' && buf[1] == 'n' && buf[2] == 'f' && buf[3] == 'o')
                 return ParseXing(offset + 4);
-            }
 
             // then VBRI (kinda rare)
             if (Read(36, buf) != 4)
                 return null;
+
             if (buf[0] == 'V' && buf[1] == 'B' && buf[2] == 'R' && buf[3] == 'I')
-            {
                 return ParseVBRI();
-            }
 
             return null;
         }
@@ -537,18 +527,30 @@ namespace NLayer.Decoder
             var sb = new System.Text.StringBuilder("MPEG");
             switch (Version)
             {
-                case MpegVersion.Version1: sb.Append("1"); break;
-                case MpegVersion.Version2: sb.Append("2"); break;
-                case MpegVersion.Version25: sb.Append("2.5"); break;
+                case MpegVersion.Version1:
+                    sb.Append("1");
+                    break;
+                case MpegVersion.Version2:
+                    sb.Append("2");
+                    break;
+                case MpegVersion.Version25:
+                    sb.Append("2.5");
+                    break;
             }
 
             // layer
             sb.Append(" Layer ");
             switch (Layer)
             {
-                case MpegLayer.LayerI: sb.Append("I"); break;
-                case MpegLayer.LayerII: sb.Append("II"); break;
-                case MpegLayer.LayerIII: sb.Append("III"); break;
+                case MpegLayer.LayerI:
+                    sb.Append("I");
+                    break;
+                case MpegLayer.LayerII:
+                    sb.Append("II");
+                    break;
+                case MpegLayer.LayerIII:
+                    sb.Append("III");
+                    break;
             }
 
             // bitrate
@@ -564,9 +566,15 @@ namespace NLayer.Decoder
                     sb.Append("Joint Stereo");
                     switch (ChannelModeExtension)
                     {
-                        case 1: sb.Append(" (I)"); break;
-                        case 2: sb.Append(" (M/S)"); break;
-                        case 3: sb.Append(" (M/S,I)"); break;
+                        case 1:
+                            sb.Append(" (I)");
+                            break;
+                        case 2:
+                            sb.Append(" (M/S)");
+                            break;
+                        case 3:
+                            sb.Append(" (M/S,I)");
+                            break;
                     }
                     break;
                 case MpegChannelMode.DualChannel:
@@ -582,13 +590,16 @@ namespace NLayer.Decoder
 
             var flagList = new System.Collections.Generic.List<string>();
             // protection
-            if (HasCrc) flagList.Add("CRC");
+            if (HasCrc)
+                flagList.Add("CRC");
 
             // copyright
-            if (IsCopyrighted) flagList.Add("Copyright");
+            if (IsCopyrighted)
+                flagList.Add("Copyright");
 
             // original
-            if (IsOriginal) flagList.Add("Original");
+            if (IsOriginal)
+                flagList.Add("Original");
 
             // emphasis
             switch (EmphasisMode)

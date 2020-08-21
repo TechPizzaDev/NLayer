@@ -10,7 +10,7 @@ namespace NLayer.Decoder
     // Layers I & II are basically identical...  
     // Layer II adds sample grouping, per subband allocation schemes, and granules
     // Because of this fact, we can use the same decoder for both
-    internal abstract class LayerIIDecoderBase : LayerDecoderBase
+    internal abstract class Layer2DecoderBase : LayerDecoderBase
     {
         protected const int SSLIMIT = 12;
 
@@ -131,7 +131,7 @@ namespace NLayer.Decoder
         private float[] _polyPhaseBuf;
         private int[][] _allocation;
 
-        protected LayerIIDecoderBase(int[][] allocLookupTable, int granuleCount) : base()
+        protected Layer2DecoderBase(int[][] allocLookupTable, int granuleCount) : base()
         {
             _allocLookupTable = allocLookupTable;
             _granuleCount = granuleCount;

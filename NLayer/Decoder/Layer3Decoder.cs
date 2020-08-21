@@ -38,7 +38,7 @@ namespace NLayer.Decoder
     /// <summary>
     /// Class Implementing Layer III Decoder.
     /// </summary>
-    internal sealed class LayerIIIDecoder : LayerDecoderBase
+    internal sealed class Layer3Decoder : LayerDecoderBase
     {
         private const int SSLIMIT = 18;
 
@@ -475,7 +475,7 @@ namespace NLayer.Decoder
         private HybridMDCT _hybrid = new HybridMDCT();
         private BitReservoir _bitRes = new BitReservoir();
 
-        internal LayerIIIDecoder()
+        internal Layer3Decoder()
         {
             _tableSelect = new int[][][]
             {

@@ -9,7 +9,8 @@ namespace NLayer.NAudioSupport
         public Mp3FrameDecompressor(NAudio.Wave.WaveFormat waveFormat)
         {
             // we assume waveFormat was calculated from the first frame already
-            OutputFormat = NAudio.Wave.WaveFormat.CreateIeeeFloatWaveFormat(waveFormat.SampleRate, waveFormat.Channels);
+            OutputFormat = NAudio.Wave.WaveFormat.CreateIeeeFloatWaveFormat(
+                waveFormat.SampleRate, waveFormat.Channels);
 
             _decoder = new MpegFrameDecoder();
             _frame = new Mp3FrameWrapper();

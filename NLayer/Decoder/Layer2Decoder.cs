@@ -6,9 +6,9 @@
 namespace NLayer.Decoder
 {
     // there's not much we have to do here... table selection, granule count, scalefactor selection
-    internal class LayerIIDecoder : LayerIIDecoderBase
+    internal class Layer2Decoder : Layer2DecoderBase
     {
-        public LayerIIDecoder() : base(_allocLookupTable, 3)
+        public Layer2Decoder() : base(_allocLookupTable, 3)
         {
         }
 
