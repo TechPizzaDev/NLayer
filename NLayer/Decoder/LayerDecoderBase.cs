@@ -193,7 +193,7 @@ namespace NLayer.Decoder
 
         private List<float[]> _synBuf = new List<float[]>(2);
         private List<int> _bufOffset = new List<int>(2);
-        private float[] _eq;
+        private float[]? _eq;
 
         public LayerDecoderBase()
         {
@@ -213,12 +213,10 @@ namespace NLayer.Decoder
             };
         }
 
-        public void SetEQ(float[] eq)
+        public void SetEQ(float[]? eq)
         {
             if (eq == null || eq.Length == 32)
-            {
                 _eq = eq;
-            }
         }
 
         public StereoMode StereoMode { get; set; }

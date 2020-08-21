@@ -1,85 +1,85 @@
 ﻿namespace NLayer
 {
     /// <summary>
-    /// Defines a standard way of representing a MPEG frame to the decoder
+    /// Defines a way of representing an MPEG frame to the decoder.
     /// </summary>
     public interface IMpegFrame
     {
         /// <summary>
-        /// Sample rate of this frame
+        /// Gets the sample rate of this frame.
         /// </summary>
         int SampleRate { get; }
 
         /// <summary>
-        /// The samplerate index (directly from the header)
+        /// Gets the samplerate index (directly from the header).
         /// </summary>
         int SampleRateIndex { get; }
 
         /// <summary>
-        /// Frame length in bytes
+        /// Gets the frame length in bytes.
         /// </summary>
         int FrameLength { get; }
 
         /// <summary>
-        /// Bit Rate
+        /// Gets the bit rate.
         /// </summary>
         int BitRate { get; }
 
         /// <summary>
-        /// MPEG Version
+        /// Gets the MPEG Version.
         /// </summary>
         MpegVersion Version { get; }
 
         /// <summary>
-        /// MPEG Layer
+        /// Gets the MPEG Layer.
         /// </summary>
         MpegLayer Layer { get; }
 
         /// <summary>
-        /// Channel Mode
+        /// Gets the channel mode.
         /// </summary>
         MpegChannelMode ChannelMode { get; }
 
         /// <summary>
-        /// The number of samples in this frame
+        /// Gets the number of samples in this frame.
         /// </summary>
         int ChannelModeExtension { get; }
 
         /// <summary>
-        /// The channel extension bits
+        /// Gets the channel extension bits.
         /// </summary>
         int SampleCount { get; }
 
         /// <summary>
-        /// The bitrate index (directly from the header)
+        /// Gets the bitrate index (directly from the header)
         /// </summary>
         int BitRateIndex { get; }
 
         /// <summary>
-        /// Whether the Copyright bit is set
+        /// Gets whether the Copyright bit is set.
         /// </summary>
         bool IsCopyrighted { get; }
 
         /// <summary>
-        /// Whether a CRC is present
+        /// Gets whether a CRC is present.
         /// </summary>
         bool HasCrc { get; }
 
         /// <summary>
-        /// Whether the CRC check failed (use error concealment strategy)
+        /// Gets whether the CRC check failed (use error concealment strategy).
         /// </summary>
         bool IsCorrupted { get; }
 
         /// <summary>
-        /// Resets the bit reader so frames can be reused
+        /// Provides sequential access to the bitstream in the frame (after the header and optional CRC).
         /// </summary>
-        void Reset();
+        /// <param name="bitCount">The number of bits to read.</param>
+        /// <returns>-1 if the end of the frame has been encountered, otherwise the bits requested.</returns>
+        int ReadBits(int bitCount);
 
         /// <summary>
-        /// Provides sequential access to the bitstream in the frame (after the header and optional CRC)
+        /// Resets the frame to read it from the beginning.
         /// </summary>
-        /// <param name="bitCount">The number of bits to read</param>
-        /// <returns>-1 if the end of the frame has been encountered, otherwise the bits requested</returns>
-        int ReadBits(int bitCount);
+        void Reset();
     }
 }

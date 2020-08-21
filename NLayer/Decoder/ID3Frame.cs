@@ -1,37 +1,22 @@
-﻿namespace NLayer.Decoder
+﻿using System;
+
+namespace NLayer.Decoder
 {
     internal class ID3Frame : FrameBase
     {
-        internal static ID3Frame TrySync(uint syncMark)
-        {
-            if ((syncMark & 0xFFFFFF00U) == 0x49443300)
-                return new ID3Frame { _version = 2 };
-            
-            if ((syncMark & 0xFFFFFF00U) == 0x54414700)
-            {
-                if ((syncMark & 0xFF) == 0x2B)
-                    return new ID3Frame { _version = 1 };
-                else
-                    return new ID3Frame { _version = 0 };
-            }
-
-            return null;
-        }
-
         private int _version;
 
         private ID3Frame()
         {
-
         }
 
-        protected override int Validate()
+        protected override int ValidateFrameHeader()
         {
             switch (_version)
             {
                 case 2:
                     // v2, yay!
-                    var buf = new byte[7];
+                    Span<byte> buf = stackalloc byte[7];
                     if (Read(3, buf) == 7)
                     {
                         byte flagsMask;
@@ -66,9 +51,7 @@
                             (buf[6] & 0x80);
 
                         if (!(flags != 0 || buf[1] == 0xFF))
-                        {
                             return size + 10;   // don't forget the sync, flag & size bytes!
-                        }
                     }
                     break;
 
@@ -82,9 +65,10 @@
             return -1;
         }
 
-        internal override void Parse()
+        public override void Parse()
         {
-            // assume we have to process it now or else...  we can still read the whole frame, so no biggie
+            // assume we have to process it now or else...  
+            // we can still read the whole frame, so no biggie
             switch (_version)
             {
                 case 2:
@@ -107,7 +91,8 @@
             //if (Read(offset, buffer) == 125)
             //{
             //    // v1 tags use ASCII encoding... 
-            //    // For now we'll use the built-in encoding, but for Win8 we'll have to build our own.
+            //    // For now we'll use the built-in encoding, 
+            //    // but for Win8 we'll have to build our own.
             //    var encoding = Encoding.ASCII;
             //
             //    // title (30)
@@ -178,7 +163,7 @@
             // look for any merged frames, as well
         }
 
-        internal int Version
+        public int Version
         {
             get
             {
@@ -188,20 +173,36 @@
             }
         }
 
-        //internal string Title { get; private set; }
-        //internal string Artist { get; private set; }
-        //internal string Album { get; private set; }
-        //internal string Year { get; private set; }
-        //internal string Comment { get; private set; }
-        //internal int Track { get; private set; }
-        //internal string Genre { get; private set; }
+        //public string Title { get; private set; }
+        //public string Artist { get; private set; }
+        //public string Album { get; private set; }
+        //public string Year { get; private set; }
+        //public string Comment { get; private set; }
+        //public int Track { get; private set; }
+        //public string Genre { get; private set; }
         // speed
         //public TimeSpan StartTime { get; private set; }
         //public TimeSpan EndTime { get; private set; }
 
-        internal void Merge(ID3Frame newFrame)
+        public void Merge(ID3Frame newFrame)
         {
             // just save off the frame for parsing later
+        }
+
+        public static ID3Frame? TrySync(uint syncMark)
+        {
+            if ((syncMark & 0xFFFFFF00U) == 0x49443300)
+                return new ID3Frame { _version = 2 };
+
+            if ((syncMark & 0xFFFFFF00U) == 0x54414700)
+            {
+                if ((syncMark & 0xFF) == 0x2B)
+                    return new ID3Frame { _version = 1 };
+                else
+                    return new ID3Frame { _version = 0 };
+            }
+
+            return null;
         }
     }
 }

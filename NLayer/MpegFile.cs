@@ -9,8 +9,11 @@ namespace NLayer
         private bool _leaveOpen, _eofFound;
         private Decoder.MpegStreamReader _reader;
         private MpegFrameDecoder _decoder;
-        private object _seekLock = new object();
         private long _position;
+
+        private float[] _readBuf = new float[1152 * 2];
+        private int _readBufLen;
+        private int _readBufOfs;
 
         /// <summary>
         /// Construct Mpeg file representation from filename.
@@ -32,6 +35,15 @@ namespace NLayer
 
             _reader = new Decoder.MpegStreamReader(_stream);
             _decoder = new MpegFrameDecoder();
+        }
+
+        /// <summary>
+        /// Stereo mode used in decoding.
+        /// </summary>
+        public StereoMode StereoMode
+        {
+            get => _decoder.StereoMode;
+            set => _decoder.StereoMode = value;
         }
 
         /// <summary>
@@ -61,6 +73,15 @@ namespace NLayer
             TimeSpan.FromSeconds((double)_reader.SampleCount.GetValueOrDefault() / _reader.SampleRate);
 
         /// <summary>
+        /// Current decode position, represented by time. Calling the setter will result in a seeking operation.
+        /// </summary>
+        public TimeSpan Time
+        {
+            get => TimeSpan.FromSeconds((double)_position / sizeof(float) / _reader.Channels / _reader.SampleRate);
+            set => Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels * sizeof(float));
+        }
+
+        /// <summary>
         /// Current decode position, in number of sample.
         /// Calling the setter will result in a seeking operation.
         /// </summary>
@@ -75,8 +96,8 @@ namespace NLayer
                     throw new ArgumentOutOfRangeException(nameof(value));
 
                 // we're thinking in 4-byte samples, pcmStep interleaved...  adjust accordingly
-                var samples = value / sizeof(float) / _reader.Channels;
-                var sampleOffset = 0;
+                long samples = value / sizeof(float) / _reader.Channels;
+                int sampleOffset = 0;
 
                 // seek to the frame preceding the one we want (unless we're seeking to the first frame)
                 if (samples >= _reader.FirstFrameSampleCount)
@@ -85,76 +106,38 @@ namespace NLayer
                     samples -= sampleOffset;
                 }
 
-                lock (_seekLock)
+                // seek the stream
+                long newPos = _reader.SeekTo(samples);
+                if (newPos == -1)
+                    throw new ArgumentOutOfRangeException(nameof(value));
+
+                _decoder.Reset();
+
+                // if we have a sample offset, decode the next frame
+                if (sampleOffset != 0)
                 {
-                    // seek the stream
-                    var newPos = _reader.SeekTo(samples);
-                    if (newPos == -1)
-                        throw new ArgumentOutOfRangeException(nameof(value));
-
-                    _decoder.Reset();
-
-                    // if we have a sample offset, decode the next frame
-                    if (sampleOffset != 0)
-                    {
-                        // throw away a frame (but allow the decoder to resync)
-                        _decoder.DecodeFrame(_reader.NextFrame(), _readBuf, 0);
-                        newPos += sampleOffset;
-                    }
-
-                    _position = newPos * sizeof(float) * _reader.Channels;
-                    _eofFound = false;
-
-                    // clear the decoder & buffer
-                    _readBufOfs = _readBufLen = 0;
+                    // throw away a frame (but allow the decoder to resync)
+                    var frame = _reader.NextFrame();
+                    _decoder.DecodeFrame(frame, _readBuf);
+                    newPos += sampleOffset;
                 }
-            }
-        }
 
-        /// <summary>
-        /// Current decode position, represented by time. Calling the setter will result in a seeking operation.
-        /// </summary>
-        public TimeSpan Time
-        {
-            get => TimeSpan.FromSeconds((double)_position / sizeof(float) / _reader.Channels / _reader.SampleRate);
-            set => Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels * sizeof(float));
+                _position = newPos * _reader.Channels * sizeof(float);
+                _eofFound = false;
+
+                // clear the decoder & buffer
+                _readBufOfs = 0;
+                _readBufLen = 0;
+            }
         }
 
         /// <summary>
         /// Set the equalizer.
         /// </summary>
         /// <param name="eq">The equalizer, represented by an array of 32 adjustments in dB.</param>
-        public void SetEQ(float[] eq)
+        public void SetEQ(float[]? eq)
         {
             _decoder.SetEQ(eq);
-        }
-
-        /// <summary>
-        /// Stereo mode used in decoding.
-        /// </summary>
-        public StereoMode StereoMode
-        {
-            get => _decoder.StereoMode;
-            set => _decoder.StereoMode = value;
-        }
-
-        /// <summary>
-        /// Read specified samples into provided buffer. Do exactly the same as <see cref="ReadSamples(float[], int, int)"/>
-        /// except that the data is written in type of byte, while still representing single-precision float (in local endian).
-        /// </summary>
-        /// <param name="buffer">Buffer to write. Floating point data will be actually written into this byte array.</param>
-        /// <param name="index">Writing offset on the destination buffer.</param>
-        /// <param name="count">Length of samples to be read, in bytes.</param>
-        /// <returns>Sample size actually reads, in bytes.</returns>
-        public int ReadSamples(byte[] buffer, int index, int count)
-        {
-            if (index < 0 || index + count > buffer.Length)
-                throw new ArgumentOutOfRangeException(nameof(index));
-
-            // make sure we're asking for an even number of samples
-            count -= (count % sizeof(float));
-
-            return ReadSamplesImpl(buffer, index, count);
         }
 
         /// <summary>
@@ -173,95 +156,81 @@ namespace NLayer
         /// </item>
         /// </list>
         /// </summary>
-        /// <param name="buffer">Buffer to write.</param>
-        /// <param name="index">Writing offset on the destination buffer.</param>
-        /// <param name="count">Count of samples to be read.</param>
-        /// <returns>Sample count actually reads.</returns>
-        public int ReadSamples(float[] buffer, int index, int count)
+        /// <param name="destination">The buffer to fill with PCM samples.</param>
+        /// <returns>The actual amount of samples read.</returns>
+        public int ReadSamples(Span<float> destination)
         {
-            if (index < 0 || index + count > buffer.Length)
-                throw new ArgumentOutOfRangeException(nameof(index));
+            int samplesRead = 0;
+            var readBuffer = _readBuf.AsSpan();
 
-            // ReadSampleImpl "thinks" in bytes, so adjust accordingly
-            return ReadSamplesImpl(buffer, index * sizeof(float), count * sizeof(float)) / sizeof(float);
-        }
-
-        private float[] _readBuf = new float[1152 * 2];
-        private int _readBufLen, _readBufOfs;
-
-        private int ReadSamplesImpl(Array buffer, int index, int count)
-        {
-            var cnt = 0;
-
-            // lock around the entire read operation so seeking doesn't bork our buffers as we decode
-            lock (_seekLock)
+            while (destination.Length > 0)
             {
-                while (count > 0)
+                if (_readBufLen > _readBufOfs)
                 {
-                    if (_readBufLen > _readBufOfs)
+                    // we have bytes in the buffer, so copy them first
+                    int bufferedCount = _readBufLen - _readBufOfs;
+                    if (bufferedCount > destination.Length)
+                        bufferedCount = destination.Length;
+
+                    readBuffer.Slice(_readBufOfs, bufferedCount).CopyTo(destination);
+
+                    // now update our counters...
+                    samplesRead += bufferedCount;
+
+                    destination = destination.Slice(bufferedCount);
+
+                    _position += bufferedCount * sizeof(float);
+                    _readBufOfs += bufferedCount;
+
+                    // finally, mark the buffer as empty if we've read everything in it
+                    if (_readBufOfs == _readBufLen)
+                        _readBufLen = 0;
+                }
+
+                // if the buffer is empty, try to fill it
+                //  NB: If we've already satisfied the read request, we'll still try to fill the buffer.
+                //      This ensures there's data in the pipe on the next call
+                if (_readBufLen == 0)
+                {
+                    if (_eofFound)
+                        break;
+
+                    // decode the next frame (update _readBuf)
+                    var frame = _reader.NextFrame();
+                    if (frame == null)
                     {
-                        // we have bytes in the buffer, so copy them first
-                        int tmp = _readBufLen - _readBufOfs;
-                        if (tmp > count)
-                            tmp = count;
-                        Buffer.BlockCopy(_readBuf, _readBufOfs, buffer, index, tmp);
-
-                        // now update our counters...
-                        cnt += tmp;
-
-                        count -= tmp;
-                        index += tmp;
-
-                        _position += tmp;
-                        _readBufOfs += tmp;
-
-                        // finally, mark the buffer as empty if we've read everything in it
-                        if (_readBufOfs == _readBufLen)
-                            _readBufLen = 0;
+                        _eofFound = true;
+                        break;
                     }
 
-                    // if the buffer is empty, try to fill it
-                    //  NB: If we've already satisfied the read request, we'll still try to fill the buffer.
-                    //      This ensures there's data in the pipe on the next call
-                    if (_readBufLen == 0)
+                    try
                     {
-                        if (_eofFound)
-                            break;
+                        _readBufLen = _decoder.DecodeFrame(frame, readBuffer);
+                        _readBufOfs = 0;
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // bad frame...  try again...
+                        _decoder.Reset();
 
-                        // decode the next frame (update _readBufXXX)
-                        var frame = _reader.NextFrame();
-                        if (frame == null)
-                        {
-                            _eofFound = true;
-                            break;
-                        }
-
-                        try
-                        {
-                            _readBufLen = _decoder.DecodeFrame(frame, _readBuf, 0) * sizeof(float);
-                            _readBufOfs = 0;
-                        }
-                        catch (InvalidDataException)
-                        {
-                            // bad frame...  try again...
-                            _decoder.Reset();
-                            _readBufOfs = _readBufLen = 0;
-                            continue;
-                        }
-                        catch (EndOfStreamException)
-                        {
-                            // no more frames
-                            _eofFound = true;
-                            break;
-                        }
-                        finally
-                        {
-                            frame.ClearBuffer();
-                        }
+                        _readBufOfs = 0;
+                        _readBufLen = 0;
+                        continue;
+                    }
+                    catch (EndOfStreamException)
+                    {
+                        // no more frames
+                        _eofFound = true;
+                        break;
+                    }
+                    finally
+                    {
+                        frame.ClearBuffer();
                     }
                 }
             }
-            return cnt;
+
+            return samplesRead;
         }
 
         /// <summary>

@@ -8,21 +8,13 @@ namespace NLayer.Decoder
     /// </summary>
     internal class RiffHeaderFrame : FrameBase
     {
-        internal static RiffHeaderFrame TrySync(uint syncMark)
-        {
-            if (syncMark == 0x52494646U)
-                return new RiffHeaderFrame();
-
-            return null;
-        }
-
         private RiffHeaderFrame()
         {
         }
 
-        protected override int Validate()
+        protected override int ValidateFrameHeader()
         {
-            var buf = new byte[4];
+            Span<byte> buf = stackalloc byte[4];
 
             // we expect this to be the "WAVE" chunk
             if (Read(8, buf) != 4)
@@ -37,7 +29,7 @@ namespace NLayer.Decoder
                 return -1;
 
             // we've found the fmt chunk, so look for the data chunk
-            var offset = 16;
+            int offset = 16;
             while (true)
             {
                 // read the length and seek forward
@@ -57,6 +49,14 @@ namespace NLayer.Decoder
 
             // ... and now we know exactly where the frame ends
             return offset + 4;
+        }
+
+        public static RiffHeaderFrame? TrySync(uint syncMark)
+        {
+            if (syncMark == 0x52494646U)
+                return new RiffHeaderFrame();
+
+            return null;
         }
     }
 }

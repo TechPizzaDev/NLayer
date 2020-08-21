@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using NAudio.Wave;
 
 namespace NLayer.NAudioSupport
@@ -47,9 +48,14 @@ namespace NLayer.NAudioSupport
             _fileDecoder.SetEQ(eq);
         }
 
+        public override int Read(Span<byte> buffer)
+        {
+            return _fileDecoder.ReadSamples(MemoryMarshal.Cast<byte, float>(buffer)) * sizeof(float);
+        }
+
         public override int Read(byte[] buffer, int offset, int count)
         {
-            return _fileDecoder.ReadSamples(buffer, offset, count);
+            return Read(buffer.AsSpan(offset, count));
         }
 
         protected override void Dispose(bool disposing)

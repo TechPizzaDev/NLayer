@@ -4,13 +4,13 @@ namespace NLayer
 {
     public class MpegFrameDecoder
     {
-        private Decoder.Layer1Decoder _layerIDecoder;
-        private Decoder.Layer2Decoder _layerIIDecoder;
-        private Decoder.Layer3Decoder _layerIIIDecoder;
-        private float[] _eqFactors;
+        private Decoder.Layer1Decoder? _layer1Decoder;
+        private Decoder.Layer2Decoder? _layer2Decoder;
+        private Decoder.Layer3Decoder? _layer3Decoder;
+        private float[]? _eqFactors;
 
         // channel buffers for getting data out of the decoders...
-        // we do it this way so the stereo interleaving code is in one place: DecodeFrameImpl(...)
+        // we do it this way so the stereo interleaving code is in one place: DecodeFrame(...)
         // if we ever add support for multi-channel, we'll have to add a pass after the initial
         //  stereo decode (since multi-channel basically uses the stereo channels as a reference)
         private float[] _ch0, _ch1;
@@ -25,16 +25,15 @@ namespace NLayer
         /// Set the equalizer.
         /// </summary>
         /// <param name="eq">The equalizer, represented by an array of 32 adjustments in dB.</param>
-        public void SetEQ(float[] eq)
+        public void SetEQ(float[]? eq)
         {
             if (eq != null)
             {
                 var factors = new float[32];
                 for (int i = 0; i < eq.Length; i++)
-                {
                     // convert from dB -> scaling
                     factors[i] = (float)Math.Pow(2, eq[i] / 6);
-                }
+
                 _eqFactors = factors;
             }
             else
@@ -47,32 +46,6 @@ namespace NLayer
         /// Stereo mode used in decoding.
         /// </summary>
         public StereoMode StereoMode { get; set; }
-
-        /// <summary>
-        /// Decode the Mpeg frame into provided buffer. Do exactly the same as <see cref="DecodeFrame(IMpegFrame, float[], int)"/>
-        /// except that the data is written in type as byte array, while still representing single-precision float (in local endian).
-        /// </summary>
-        /// <param name="frame">The Mpeg frame to be decoded.</param>
-        /// <param name="dest">Destination buffer. Decoded PCM (single-precision floating point array) will be written into it.</param>
-        /// <param name="destOffset">Writing offset on the destination buffer.</param>
-        /// <returns></returns>
-        public int DecodeFrame(IMpegFrame frame, byte[] dest, int destOffset)
-        {
-            if (frame == null)
-                throw new ArgumentNullException("frame");
-            if (dest == null)
-                throw new ArgumentNullException("dest");
-            if (destOffset % 4 != 0)
-                throw new ArgumentException("Must be an even multiple of 4", "destOffset");
-
-            var bufferAvailable = (dest.Length - destOffset) / 4;
-            if (bufferAvailable < (frame.ChannelMode == MpegChannelMode.Mono ? 1 : 2) * frame.SampleCount)
-            {
-                throw new ArgumentException("Buffer not large enough!  Must be big enough to hold the frame's entire output.  This is up to 9,216 bytes.", "dest");
-            }
-
-            return DecodeFrameImpl(frame, dest, destOffset / 4) * 4;
-        }
 
         /// <summary>
         /// Decode the Mpeg frame into provided buffer.
@@ -91,81 +64,65 @@ namespace NLayer
         /// </list>
         /// </summary>
         /// <param name="frame">The Mpeg frame to be decoded.</param>
-        /// <param name="dest">Destination buffer. Decoded PCM (single-precision floating point array) will be written into it.</param>
-        /// <param name="destOffset">Writing offset on the destination buffer.</param>
-        /// <returns></returns>
-        public int DecodeFrame(IMpegFrame frame, float[] dest, int destOffset)
+        /// <param name="destination">The buffer to fill with PCM samples.</param>
+        /// <returns>The actual amount of samples read.</returns>
+        public int DecodeFrame(IMpegFrame frame, Span<float> destination)
         {
             if (frame == null)
                 throw new ArgumentNullException(nameof(frame));
-            if (dest == null)
-                throw new ArgumentNullException(nameof(dest));
-
-            if (dest.Length - destOffset < (frame.ChannelMode == MpegChannelMode.Mono ? 1 : 2) * frame.SampleCount)
-            {
-                throw new ArgumentException(
-                    "Buffer not large enough!  Must be big enough to hold the frame's entire output.  " +
-                    "This is up to 2,304 elements.", nameof(dest));
-            }
-
-            return DecodeFrameImpl(frame, dest, destOffset);
-        }
-
-        private int DecodeFrameImpl(IMpegFrame frame, Array dest, int destOffset)
-        {
-            frame.Reset();
 
             Decoder.LayerDecoderBase decoder;
             switch (frame.Layer)
             {
                 case MpegLayer.LayerI:
-                    if (_layerIDecoder == null)
-                        _layerIDecoder = new Decoder.Layer1Decoder();
-                    decoder = _layerIDecoder;
+                    if (_layer1Decoder == null)
+                        _layer1Decoder = new Decoder.Layer1Decoder();
+                    decoder = _layer1Decoder;
                     break;
 
                 case MpegLayer.LayerII:
-                    if (_layerIIDecoder == null)
-                        _layerIIDecoder = new Decoder.Layer2Decoder();
-                    decoder = _layerIIDecoder;
+                    if (_layer2Decoder == null)
+                        _layer2Decoder = new Decoder.Layer2Decoder();
+                    decoder = _layer2Decoder;
                     break;
 
                 case MpegLayer.LayerIII:
-                    if (_layerIIIDecoder == null)
-                        _layerIIIDecoder = new Decoder.Layer3Decoder();
-                    decoder = _layerIIIDecoder;
+                    if (_layer3Decoder == null)
+                        _layer3Decoder = new Decoder.Layer3Decoder();
+                    decoder = _layer3Decoder;
                     break;
 
                 default:
                     return 0;
             }
 
+            frame.Reset();
+
             decoder.SetEQ(_eqFactors);
             decoder.StereoMode = StereoMode;
 
-            var cnt = decoder.DecodeFrame(frame, _ch0, _ch1);
+            int decodedCount = decoder.DecodeFrame(frame, _ch0, _ch1);
 
             if (frame.ChannelMode == MpegChannelMode.Mono)
             {
-                Buffer.BlockCopy(_ch0, 0, dest, destOffset * sizeof(float), cnt * sizeof(float));
+                _ch0.AsSpan(0, decodedCount).CopyTo(destination);
             }
             else
             {
-                // This is kinda annoying...  if we're doing a downmix, we should technically only output a single channel
-                //  The problem is, our caller is probably expecting stereo output.  Grrrr....
-
-                // We use Buffer.BlockCopy here because we don't know dest's type, but do know it's big enough to do the copy
-                for (int i = 0; i < cnt; i++)
+                // This is kinda annoying...  if we're doing a downmix,
+                // we should technically only output a single channel
+                // The problem is, our caller is probably expecting stereo output.  Grrrr....
+                
+                // TODO: optimize
+                for (int i = 0; i < decodedCount; i++)
                 {
-                    Buffer.BlockCopy(_ch0, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
-                    ++destOffset;
-                    Buffer.BlockCopy(_ch1, i * sizeof(float), dest, destOffset * sizeof(float), sizeof(float));
-                    ++destOffset;
+                    destination[i * 2 + 0] = _ch0[i];
+                    destination[i * 2 + 1] = _ch1[i];
                 }
-                cnt *= 2;
+                decodedCount *= 2;
             }
 
-            return cnt;
+            return decodedCount;
         }
 
         /// <summary>
@@ -175,9 +132,9 @@ namespace NLayer
         {
             // the synthesis filters need to be cleared
 
-            _layerIDecoder?.ResetForSeek();
-            _layerIIDecoder?.ResetForSeek();
-            _layerIIIDecoder?.ResetForSeek();
+            _layer1Decoder?.ResetForSeek();
+            _layer2Decoder?.ResetForSeek();
+            _layer3Decoder?.ResetForSeek();
         }
     }
 }

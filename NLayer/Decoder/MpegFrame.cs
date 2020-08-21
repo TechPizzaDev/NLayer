@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 
 namespace NLayer.Decoder
 {
@@ -26,9 +27,10 @@ namespace NLayer.Decoder
         // Prot Mode: 60 bytes per instance
 
         // IntPtr
-        internal MpegFrame Next;
+        public MpegFrame? Next;
+
         // 4
-        internal int Number;
+        public int Number;
 
         // 4
         private int _syncBits;
@@ -45,37 +47,11 @@ namespace NLayer.Decoder
         // 4
         private bool _isMuted;
 
-        internal static MpegFrame TrySync(uint syncMark)
-        {
-            if ((syncMark & 0xFFE00000) == 0xFFE00000 && // frame sync
-                (syncMark & 0x00180000) != 0x00080000 && // MPEG version != reserved
-                (syncMark & 0x00060000) != 0x00000000 && // layer version != reserved
-                (syncMark & 0x0000F000) != 0x0000F000 && // bitrate != bad
-                (syncMark & 0x00000C00) != 0x00000C00)   // sample rate != reserved
-            {
-                // now check the stereo modes
-                switch ((syncMark >> 4) & 0xF)
-                {
-                    case 0x0:   // stereo
-                    case 0x4:   // joint stereo
-                    case 0x5:   // "
-                    case 0x6:   // "
-                    case 0x7:   // "
-                    case 0x8:   // dual channel
-                    case 0xC:   // mono
-                        return new MpegFrame { _syncBits = (int)syncMark };
-                }
-            }
-
-            return null;
-        }
-
         private MpegFrame()
         {
-
         }
 
-        protected override int Validate()
+        protected override int ValidateFrameHeader()
         {
             // TrySync has already validated version, layer, bitrate, and samplerate
 
@@ -147,7 +123,7 @@ namespace NLayer.Decoder
             return frameSize;
         }
 
-        internal int GetSideDataSize()
+        public int GetSideDataSize()
         {
             switch (Layer)
             {
@@ -230,7 +206,7 @@ namespace NLayer.Decoder
             return true;
         }
 
-        static internal void UpdateCRC(int data, int length, ref uint crc)
+        public static void UpdateCRC(int data, int length, ref uint crc)
         {
             var masking = 1U << length;
             while ((masking >>= 1) != 0)
@@ -243,9 +219,9 @@ namespace NLayer.Decoder
             crc &= 0xFFFF;
         }
 
-        internal VBRInfo ParseVBR()
+        public VBRInfo? ParseVBR()
         {
-            var buf = new byte[4];
+            Span<byte> buf = stackalloc byte[4];
 
             // Xing first
             int offset;
@@ -273,36 +249,36 @@ namespace NLayer.Decoder
             return null;
         }
 
-        private VBRInfo ParseXing(int offset)
+        private VBRInfo? ParseXing(int offset)
         {
             var info = new VBRInfo();
             info.Channels = Channels;
             info.SampleRate = SampleRate;
             info.SampleCount = SampleCount;
 
-            var buf = new byte[100];
-            if (Read(offset, buf, 0, 4) != 4)
+            Span<byte> buf = stackalloc byte[100];
+            if (Read(offset, buf.Slice(0, 4)) != 4)
                 return null;
             offset += 4;
 
-            var flags = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+            int flags = BinaryPrimitives.ReadInt32BigEndian(buf);
 
             // frame count
             if ((flags & 0x1) != 0)
             {
-                if (Read(offset, buf, 0, 4) != 4)
+                if (Read(offset, buf.Slice(0, 4)) != 4)
                     return null;
                 offset += 4;
-                info.VBRFrames = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+                info.VBRFrames = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
 
             // byte count
             if ((flags & 0x2) != 0)
             {
-                if (Read(offset, buf, 0, 4) != 4)
+                if (Read(offset, buf.Slice(0, 4)) != 4)
                     return null;
                 offset += 4;
-                info.VBRBytes = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+                info.VBRBytes = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
 
             // TOC
@@ -317,10 +293,10 @@ namespace NLayer.Decoder
             // scale
             if ((flags & 0x8) != 0)
             {
-                if (Read(offset, buf, 0, 4) != 4)
+                if (Read(offset, buf.Slice(0, 4)) != 4)
                     return null;
                 offset += 4;
-                info.VBRQuality = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+                info.VBRQuality = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
 
             //// now look for a LAME header (note: if it isn't found, it doesn't fail the VBR parse)
@@ -348,7 +324,7 @@ namespace NLayer.Decoder
             return info;
         }
 
-        private VBRInfo ParseVBRI()
+        private VBRInfo? ParseVBRI()
         {
             var info = new VBRInfo();
             info.Channels = Channels;
@@ -392,6 +368,50 @@ namespace NLayer.Decoder
 
         public int FrameLength => Length;
 
+        // the order is backwards, and "0" is invalid
+        public MpegLayer Layer => (MpegLayer)((4 - ((_syncBits >> 17) & 3)) % 4);
+
+        public bool HasCrc => (_syncBits & 0x10000) == 0;
+
+        public int BitRateIndex => (_syncBits >> 12) & 0xF;
+
+        public int SampleRateIndex => (_syncBits >> 10) & 0x3;
+
+        private int Padding => (_syncBits >> 9) & 0x1;
+
+        public MpegChannelMode ChannelMode => (MpegChannelMode)((_syncBits >> 6) & 0x3);
+
+        public int ChannelModeExtension => (_syncBits >> 4) & 0x3;
+
+        public int Channels => (ChannelMode == MpegChannelMode.Mono ? 1 : 2);
+
+        public bool IsCopyrighted => (_syncBits & 0x8) == 0x8;
+
+        public bool IsOriginal => (_syncBits & 0x4) == 0x4;
+
+        public int EmphasisMode => (_syncBits & 0x3);
+
+        public bool IsCorrupted => _isMuted;
+
+        public long SampleOffset
+        {
+            get => _offset;
+            set => _offset = value;
+        }
+
+        public int SampleCount
+        {
+            get
+            {
+                if (Layer == MpegLayer.LayerI)
+                    return 384;
+                if (Layer == MpegLayer.LayerIII && Version > MpegVersion.Version1)
+                    return 576;
+                return 1152;
+            }
+        }
+
+
         public MpegVersion Version
         {
             get
@@ -405,11 +425,6 @@ namespace NLayer.Decoder
                 };
             }
         }
-
-        // the order is backwards, and "0" is invalid
-        public MpegLayer Layer => (MpegLayer)((4 - ((_syncBits >> 17) & 3)) % 4);
-
-        public bool HasCrc => (_syncBits & 0x10000) == 0;
 
         public int BitRate
         {
@@ -426,8 +441,6 @@ namespace NLayer.Decoder
                 }
             }
         }
-
-        public int BitRateIndex => (_syncBits >> 12) & 0xF;
 
         public int SampleRate
         {
@@ -450,42 +463,6 @@ namespace NLayer.Decoder
                 }
                 return sr;
             }
-        }
-
-        public int SampleRateIndex => (_syncBits >> 10) & 0x3;
-
-        private int Padding => (_syncBits >> 9) & 0x1;
-
-        public MpegChannelMode ChannelMode => (MpegChannelMode)((_syncBits >> 6) & 0x3);
-
-        public int ChannelModeExtension => (_syncBits >> 4) & 0x3;
-
-        internal int Channels => (ChannelMode == MpegChannelMode.Mono ? 1 : 2);
-
-        public bool IsCopyrighted => (_syncBits & 0x8) == 0x8;
-
-        internal bool IsOriginal => (_syncBits & 0x4) == 0x4;
-
-        internal int EmphasisMode => (_syncBits & 0x3);
-
-        public bool IsCorrupted => _isMuted;
-
-        public int SampleCount
-        {
-            get
-            {
-                if (Layer == MpegLayer.LayerI)
-                    return 384;
-                if (Layer == MpegLayer.LayerIII && Version > MpegVersion.Version1)
-                    return 576;
-                return 1152;
-            }
-        }
-
-        internal long SampleOffset
-        {
-            get => _offset;
-            set => _offset = value;
         }
 
         public void Reset()
@@ -518,6 +495,31 @@ namespace NLayer.Decoder
             int tmp = (int)((_bitBucket >> (_bitsRead - bitCount)) & ((1UL << bitCount) - 1));
             _bitsRead -= bitCount;
             return tmp;
+        }
+
+        public static MpegFrame? TrySync(uint syncMark)
+        {
+            if ((syncMark & 0xFFE00000) == 0xFFE00000 && // frame sync
+                (syncMark & 0x00180000) != 0x00080000 && // MPEG version != reserved
+                (syncMark & 0x00060000) != 0x00000000 && // layer version != reserved
+                (syncMark & 0x0000F000) != 0x0000F000 && // bitrate != bad
+                (syncMark & 0x00000C00) != 0x00000C00)   // sample rate != reserved
+            {
+                // now check the stereo modes
+                switch ((syncMark >> 4) & 0xF)
+                {
+                    case 0x0:   // stereo
+                    case 0x4:   // joint stereo
+                    case 0x5:   // "
+                    case 0x6:   // "
+                    case 0x7:   // "
+                    case 0x8:   // dual channel
+                    case 0xC:   // mono
+                        return new MpegFrame { _syncBits = (int)syncMark };
+                }
+            }
+
+            return null;
         }
 
 #if DEBUG

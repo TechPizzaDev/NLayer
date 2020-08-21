@@ -1,10 +1,13 @@
 ﻿
+using System;
+using System.Runtime.InteropServices;
+
 namespace NLayer.NAudioSupport
 {
     public class Mp3FrameDecompressor : NAudio.Wave.IMp3FrameDecompressor
     {
-        MpegFrameDecoder _decoder;
-        Mp3FrameWrapper _frame;
+        private MpegFrameDecoder _decoder;
+        private Mp3FrameWrapper _frame;
 
         public Mp3FrameDecompressor(NAudio.Wave.WaveFormat waveFormat)
         {
@@ -16,10 +19,12 @@ namespace NLayer.NAudioSupport
             _frame = new Mp3FrameWrapper();
         }
 
-        public int DecompressFrame(NAudio.Wave.Mp3Frame frame, byte[] dest, int destOffset)
+        public int DecompressFrame(NAudio.Wave.Mp3Frame frame, byte[] buffer, int offset)
         {
             _frame.WrappedFrame = frame;
-            return _decoder.DecodeFrame(_frame, dest, destOffset);
+
+            var dst = MemoryMarshal.Cast<byte, float>(buffer.AsSpan(offset));
+            return _decoder.DecodeFrame(_frame, dst) * sizeof(float);
         }
 
         public NAudio.Wave.WaveFormat OutputFormat { get; private set; }
