@@ -32,6 +32,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace NLayer.Decoder
 {
@@ -464,8 +466,8 @@ namespace NLayer.Decoder
 
         static internal bool GetCRC(MpegFrame frame, ref uint crc)
         {
-            var cnt = frame.GetSideDataSize();
-            while (--cnt >= 0)
+            int count = frame.GetSideDataSize();
+            while (--count >= 0)
             {
                 MpegFrame.UpdateCRC(frame.ReadBits(8), 8, ref crc);
             }
@@ -883,7 +885,8 @@ namespace NLayer.Decoder
 
         #region Variables
 
-        private int[] _sfBandIndexL, _sfBandIndexS;
+        private int[]? _sfBandIndexL;
+        private int[]? _sfBandIndexS;
 
         // these are byte[] to save memory
         private byte[] _cbLookupL = new byte[SSLIMIT * SBLIMIT];
@@ -992,6 +995,9 @@ namespace NLayer.Decoder
                         _sfBandIndexS = _sfBandIndexSTable[8];
                         break;
                 }
+
+                Debug.Assert(_sfBandIndexL != null);
+                Debug.Assert(_sfBandIndexS != null);
 
                 // precalculate the critical bands per bucket
                 int cbL = 0, cbS = 0;
@@ -1211,7 +1217,7 @@ namespace NLayer.Decoder
                 blockTypeNumber = 0;
             }
 
-            int[] slen = new int[4];
+            Span<int> slen = stackalloc int[4];
             int blockNumber;
             if ((chanModeExt & 1) == 1 && ch == 1)
             {
@@ -1379,6 +1385,8 @@ namespace NLayer.Decoder
             }
             else
             {
+                Debug.Assert(_sfBandIndexL != null);
+
                 region1Start = _sfBandIndexL[_regionAddress1[gr][ch] + 1];
                 region2Start = _sfBandIndexL[Math.Min(_regionAddress1[gr][ch] + _regionAddress2[gr][ch] + 2, 22)];
             }
@@ -1458,6 +1466,8 @@ namespace NLayer.Decoder
             if (val == 0f)
                 return 0f;
 
+            Debug.Assert(_sfBandIndexL != null);
+
             if (_blockSplitFlag[gr][ch] &&
                 _blockType[gr][ch] == 2 &&
                 !(_mixedBlockFlag[gr][ch] && idx < _sfBandIndexL[8]))
@@ -1525,9 +1535,18 @@ namespace NLayer.Decoder
             //  1) Joint Stereo and one (or both) of the extensions are enabled, or
             //  2) We're doing a downmix to mono
 
-            if (channelMode == MpegChannelMode.JointStereo && chanModeExt != 0)
+
+            if (channelMode != MpegChannelMode.JointStereo || chanModeExt == 0)
             {
-                var midSide = (chanModeExt & 0x2) == 2;
+                if (_channels != 1)
+                {
+                    // this is a no-op most of the time
+                    ApplyFullStereo(0, SSLIMIT * SBLIMIT);
+                }
+            }
+            else
+            {
+                bool midSide = (chanModeExt & 0x2) == 2;
 
                 if ((chanModeExt & 0x1) == 1)
                 {
@@ -1546,6 +1565,9 @@ namespace NLayer.Decoder
                             break;
                         }
                     }
+
+                    Debug.Assert(_sfBandIndexL != null);
+                    Debug.Assert(_sfBandIndexS != null);
 
                     // figure up which passes we'll need and for which ranges
                     int lEnd = -1, sStart = -1;
@@ -1579,10 +1601,8 @@ namespace NLayer.Decoder
                     // we also don't have to mess with "finding" again; it was done above
                     int sfb = 0;
                     if (lastValueIdx > -1)
-                    {
                         sfb = _cbLookupL[lastValueIdx] + 1;
-                    }
-
+                    
                     // make sure we do the mid/side processing on the lower bands (if needed)
                     if (sfb > 0 && sStart == -1)
                     {
@@ -1765,11 +1785,6 @@ namespace NLayer.Decoder
                     ApplyFullStereo(0, SSLIMIT * SBLIMIT);
                 }
             }
-            else if (_channels != 1)
-            {
-                // this is a no-op most of the time
-                ApplyFullStereo(0, SSLIMIT * SBLIMIT);
-            }
         }
 
         private void ApplyIStereo(int i, int sb, int isPos)
@@ -1854,6 +1869,9 @@ namespace NLayer.Decoder
 
         private void Reorder(Span<float> buf, bool mixedBlock)
         {
+            Debug.Assert(_sfBandIndexL != null);
+            Debug.Assert(_sfBandIndexS != null);
+
             Span<float> reorderBuf = stackalloc float[SBLIMIT * SSLIMIT];
 
             // reorder into reorderBuf, then copy back

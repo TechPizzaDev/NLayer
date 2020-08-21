@@ -85,13 +85,9 @@ namespace NLayer.Decoder
             if (BitRateIndex > 0)
             {
                 if (Layer == MpegLayer.LayerI)
-                {
                     frameSize = (12 * BitRate / SampleRate + Padding) * 4;
-                }
                 else
-                {
                     frameSize = 144 * BitRate / SampleRate + Padding;
-                }
             }
             else
             {

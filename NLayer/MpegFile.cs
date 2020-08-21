@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace NLayer
@@ -118,7 +119,7 @@ namespace NLayer
                 {
                     // throw away a frame (but allow the decoder to resync)
                     var frame = _reader.NextFrame();
-                    _decoder.DecodeFrame(frame, _readBuf);
+                    _decoder.DecodeFrame(frame!, _readBuf);
                     newPos += sampleOffset;
                 }
 
