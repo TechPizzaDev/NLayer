@@ -33,6 +33,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace NLayer.Decoder
 {
@@ -259,19 +260,21 @@ namespace NLayer.Decoder
             _bufOffset[channel] = k;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void DCT32(ReadOnlySpan<float> src, Span<float> dst, int k)
         {
             Span<float> ei32 = stackalloc float[16];
             Span<float> eo32 = stackalloc float[16];
             Span<float> oi32 = stackalloc float[16];
             Span<float> oo32 = stackalloc float[16];
+            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
 
             int i;
 
             for (i = 0; i < 16; i++)
             {
                 ei32[i] = src[i] + src[31 - i];
-                oi32[i] = (src[i] - src[31 - i]) * SYNTH_COS64_TABLE[2 * i];
+                oi32[i] = (src[i] - src[31 - i]) * synthCos64Table[2 * i];
             }
 
             DCT16(ei32, eo32);
@@ -286,47 +289,49 @@ namespace NLayer.Decoder
             dst[31 + k] = oo32[15];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void DCT16(ReadOnlySpan<float> src, Span<float> dst)
         {
             Span<float> ei16 = stackalloc float[8];
             Span<float> eo16 = stackalloc float[8];
             Span<float> oi16 = stackalloc float[8];
             Span<float> oo16 = stackalloc float[8];
+            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
 
             float a, b;
 
             a = src[0];
             b = src[15];
             ei16[0] = a + b;
-            oi16[0] = (a - b) * SYNTH_COS64_TABLE[1];
+            oi16[0] = (a - b) * synthCos64Table[1];
             a = src[1];
             b = src[14];
             ei16[1] = a + b;
-            oi16[1] = (a - b) * SYNTH_COS64_TABLE[5];
+            oi16[1] = (a - b) * synthCos64Table[5];
             a = src[2];
             b = src[13];
             ei16[2] = a + b;
-            oi16[2] = (a - b) * SYNTH_COS64_TABLE[9];
+            oi16[2] = (a - b) * synthCos64Table[9];
             a = src[3];
             b = src[12];
             ei16[3] = a + b;
-            oi16[3] = (a - b) * SYNTH_COS64_TABLE[13];
+            oi16[3] = (a - b) * synthCos64Table[13];
             a = src[4];
             b = src[11];
             ei16[4] = a + b;
-            oi16[4] = (a - b) * SYNTH_COS64_TABLE[17];
+            oi16[4] = (a - b) * synthCos64Table[17];
             a = src[5];
             b = src[10];
             ei16[5] = a + b;
-            oi16[5] = (a - b) * SYNTH_COS64_TABLE[21];
+            oi16[5] = (a - b) * synthCos64Table[21];
             a = src[6];
             b = src[9];
             ei16[6] = a + b;
-            oi16[6] = (a - b) * SYNTH_COS64_TABLE[25];
+            oi16[6] = (a - b) * synthCos64Table[25];
             a = src[7];
             b = src[8];
             ei16[7] = a + b;
-            oi16[7] = (a - b) * SYNTH_COS64_TABLE[29];
+            oi16[7] = (a - b) * synthCos64Table[29];
 
             DCT8(ei16, eo16);
             DCT8(oi16, oo16);
@@ -349,12 +354,14 @@ namespace NLayer.Decoder
             dst[15] = oo16[7];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private void DCT8(ReadOnlySpan<float> src, Span<float> dst)
         {
             Span<float> ei8 = stackalloc float[4];
             Span<float> tmp8 = stackalloc float[6];
             Span<float> oi8 = stackalloc float[4];
             Span<float> oo8 = stackalloc float[4];
+            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
 
             /* Even indices */
             ei8[0] = src[0] + src[7];
@@ -364,8 +371,8 @@ namespace NLayer.Decoder
 
             tmp8[0] = ei8[0] + ei8[1];
             tmp8[1] = ei8[2] + ei8[3];
-            tmp8[2] = (ei8[0] - ei8[1]) * SYNTH_COS64_TABLE[7];
-            tmp8[3] = (ei8[2] - ei8[3]) * SYNTH_COS64_TABLE[23];
+            tmp8[2] = (ei8[0] - ei8[1]) * synthCos64Table[7];
+            tmp8[3] = (ei8[2] - ei8[3]) * synthCos64Table[23];
             tmp8[4] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
 
             dst[0] = tmp8[0] + tmp8[1];
@@ -374,15 +381,15 @@ namespace NLayer.Decoder
             dst[6] = tmp8[4];
 
             /* Odd indices */
-            oi8[0] = (src[0] - src[7]) * SYNTH_COS64_TABLE[3];
-            oi8[1] = (src[1] - src[6]) * SYNTH_COS64_TABLE[11];
-            oi8[2] = (src[2] - src[5]) * SYNTH_COS64_TABLE[19];
-            oi8[3] = (src[3] - src[4]) * SYNTH_COS64_TABLE[27];
+            oi8[0] = (src[0] - src[7]) * synthCos64Table[3];
+            oi8[1] = (src[1] - src[6]) * synthCos64Table[11];
+            oi8[2] = (src[2] - src[5]) * synthCos64Table[19];
+            oi8[3] = (src[3] - src[4]) * synthCos64Table[27];
 
             tmp8[0] = oi8[0] + oi8[3];
             tmp8[1] = oi8[1] + oi8[2];
-            tmp8[2] = (oi8[0] - oi8[3]) * SYNTH_COS64_TABLE[7];
-            tmp8[3] = (oi8[1] - oi8[2]) * SYNTH_COS64_TABLE[23];
+            tmp8[2] = (oi8[0] - oi8[3]) * synthCos64Table[7];
+            tmp8[3] = (oi8[1] - oi8[2]) * synthCos64Table[23];
             tmp8[4] = tmp8[2] + tmp8[3];
             tmp8[5] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
 
@@ -397,31 +404,36 @@ namespace NLayer.Decoder
             dst[7] = oo8[3];
         }
 
-        private void BuildUVec(Span<float> u_vec, Span<float> cur_synbuf, int k)
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private void BuildUVec(Span<float> u_vec, ReadOnlySpan<float> cur_synbuf, int k)
         {
-            int i, j, uvp = 0;
+            int uvp = 0;
 
-            for (j = 0; j < 8; j++)
+            for (int j = 0; j < 8; j++)
             {
-                for (i = 0; i < 16; i++)
+                var su_vec = u_vec.Slice(uvp);
+                var synbuf1 = cur_synbuf.Slice(k, 32);
+
+                // Copy first 32 elements
+                for (int i = 0; i < 16; i++)
                 {
-                    /* Copy first 32 elements */
-                    u_vec[uvp + i] = cur_synbuf[k + i + 16];
-                    u_vec[uvp + i + 17] = -cur_synbuf[k + 31 - i];
+                    su_vec[i] = synbuf1[i + 16];
+                    su_vec[i + 17] = -synbuf1[31 - i];
                 }
 
-                /* k wraps at the synthesis buffer boundary  */
+                // k wraps at the synthesis buffer boundary  
                 k = (k + 32) & 511;
 
-                for (i = 0; i < 16; i++)
+                // Copy next 32 elements
+                var synbuf2 = cur_synbuf.Slice(k, 17);
+                for (int i = 0; i < 16; i++)
                 {
-                    /* Copy next 32 elements */
-                    u_vec[uvp + i + 32] = -cur_synbuf[k + 16 - i];
-                    u_vec[uvp + i + 48] = -cur_synbuf[k + i];
+                    su_vec[i + 32] = -synbuf2[16 - i];
+                    su_vec[i + 48] = -synbuf2[i];
                 }
-                u_vec[uvp + 16] = 0;
+                su_vec[16] = 0;
 
-                /* k wraps at the synthesis buffer boundary  */
+                // k wraps at the synthesis buffer boundary 
                 k = (k + 32) & 511;
                 uvp += 64;
             }
@@ -429,7 +441,8 @@ namespace NLayer.Decoder
 
         private void DewindowOutput(Span<float> u_vec, Span<float> samples)
         {
-            u_vec = u_vec.Slice(0, 512);
+            if (u_vec.Length != 512)
+                throw new ArgumentException(nameof(u_vec));
 
             Span<float> s_uvec = u_vec;
             Span<float> dewindowTable = DEWINDOW_TABLE.AsSpan(0, 512);
@@ -447,10 +460,35 @@ namespace NLayer.Decoder
                     dewindowTable = dewindowTable.Slice(Vector<float>.Count);
                 }
             }
-            for (int i = 0; i < s_uvec.Length; i++)
-                s_uvec[i] *= dewindowTable[i];
+            for (int j = 0; j < s_uvec.Length; j++)
+                s_uvec[j] *= dewindowTable[j];
 
-            for (int i = 0; i < 32; i++)
+            int i = 0;
+            if (Vector.IsHardwareAccelerated)
+            {
+                for (; i + Vector<float>.Count <= 32; i += Vector<float>.Count)
+                {
+                    var sum = new Vector<float>(u_vec.Slice(i));
+                    sum += new Vector<float>(u_vec.Slice(i + (1 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (2 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (3 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (4 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (5 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (6 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (7 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (8 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (9 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (10 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (11 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (12 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (13 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (14 << 5)));
+                    sum += new Vector<float>(u_vec.Slice(i + (15 << 5)));
+
+                    sum.CopyTo(samples.Slice(i));
+                }
+            }
+            for (; i < 32; i++)
             {
                 float sum = u_vec[i];
                 sum += u_vec[i + (1 << 5)];
@@ -468,10 +506,9 @@ namespace NLayer.Decoder
                 sum += u_vec[i + (13 << 5)];
                 sum += u_vec[i + (14 << 5)];
                 sum += u_vec[i + (15 << 5)];
-                u_vec[i] = sum;
-            }
 
-            u_vec.Slice(0, 32).CopyTo(samples);
+                samples[i] = sum;
+            }
         }
     }
 }

@@ -78,9 +78,9 @@ namespace NLayer.Decoder
             return bits;
         }
 
+        // this is an optimized single-bit read
         public int Get1Bit()
         {
-            // this is an optimized single-bit reader
             if (_bitsLeft == 0)
                 throw new System.IO.InvalidDataException("Reservoir did not have enough bytes!");
 
@@ -88,16 +88,22 @@ namespace NLayer.Decoder
             _bitsRead++;
             int val = (_buf[_start] >> _bitsLeft) & 1;
 
-            if (_bitsLeft == 0 && (_start = (_start + 1) % _buf.Length) != _end + 1)
-                _bitsLeft = 8;
-            
+            if (_bitsLeft == 0)
+            {
+                if (++_start >= _buf.Length)
+                    _start = 0;
+
+                if (_start != _end + 1)
+                    _bitsLeft = 8;
+            }
+
             return val;
         }
 
         public int TryPeekBits(int count, out int readCount)
         {
             if (count < 0 || count > 32)
-                throw new ArgumentOutOfRangeException(nameof(count), "Must return between 0 and 32 bits!");
+                throw new ArgumentOutOfRangeException(nameof(count), "Must return between 0 and 32 bits.");
 
             // if we don't have any bits left, just return no bits read
             if (_bitsLeft == 0 || count == 0)
@@ -112,23 +118,25 @@ namespace NLayer.Decoder
             {
                 // just grab the bits, adjust the "left" count, and return
                 bits >>= _bitsLeft - count;
-                bits &= ((1 << count) - 1);
+                bits &= (1 << count) - 1;
                 readCount = count;
                 return bits;
             }
 
             // we have to do it the hard way...
-            bits &= ((1 << _bitsLeft) - 1);
+            bits &= (1 << _bitsLeft) - 1;
             count -= _bitsLeft;
             readCount = _bitsLeft;
 
             int resStart = _start;
 
             // arg... gotta grab some more bits...
+            // advance the start marker, and if we just advanced it past the end of the buffer, bail
             while (count > 0)
             {
-                // advance the start marker, and if we just advanced it past the end of the buffer, bail
-                if ((resStart = (resStart + 1) % _buf.Length) == _end + 1)
+                if (++resStart >= _buf.Length)
+                    resStart = 0;
+                else if (resStart == _end + 1)
                     break;
 
                 // figure out how many bits to pull from it
@@ -136,7 +144,7 @@ namespace NLayer.Decoder
 
                 // move the existing bits over
                 bits <<= bitsToRead;
-                bits |= (_buf[resStart] >> ((8 - bitsToRead) % 8));
+                bits |= _buf[resStart] >> (8 - bitsToRead);
 
                 // update our count
                 count -= bitsToRead;
@@ -153,7 +161,7 @@ namespace NLayer.Decoder
             get
             {
                 if (_bitsLeft > 0)
-                    return ((_end + _buf.Length - _start) % _buf.Length * 8) + _bitsLeft;
+                    return ((_end - _start + _buf.Length) % _buf.Length * 8) + _bitsLeft;
 
                 return 0;
             }

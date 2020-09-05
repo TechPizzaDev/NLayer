@@ -868,7 +868,7 @@ namespace NLayer.Decoder
             int bits = br.TryPeekBits(maxBits, out int readBits);
             if (readBits < maxBits)
                 bits <<= maxBits - readBits;
-            
+
             // try to find the correct node
             while (node != null && node.Length <= readBits)
             {
@@ -1031,13 +1031,13 @@ namespace NLayer.Decoder
 
         private class HuffmanListNode
         {
-            internal byte Value;
+            public byte Value;
 
-            internal int Length;
-            internal int Bits;
-            internal int Mask;
+            public int Length;
+            public int Bits;
+            public int Mask;
 
-            internal HuffmanListNode? Next;
+            public HuffmanListNode? Next;
         }
     }
 }

@@ -156,17 +156,11 @@ namespace NLayer.Decoder
 
                 case MpegLayer.LayerIII:
                     if (ChannelMode == MpegChannelMode.Mono && Version >= MpegVersion.Version2)
-                    {
                         return 9;
-                    }
                     else if (ChannelMode != MpegChannelMode.Mono && Version < MpegVersion.Version2)
-                    {
                         return 32;
-                    }
                     else
-                    {
                         return 17;
-                    }
             }
 
             return 0;
@@ -185,9 +179,11 @@ namespace NLayer.Decoder
                 case MpegLayer.LayerI:
                     apply = Layer1Decoder.GetCRC(this, ref crc);
                     break;
+
                 case MpegLayer.LayerII:
                     apply = Layer2Decoder.GetCRC(this, ref crc);
                     break;
+
                 case MpegLayer.LayerIII:
                     apply = Layer3Decoder.GetCRC(this, ref crc);
                     break;
@@ -328,31 +324,22 @@ namespace NLayer.Decoder
             info.SampleCount = SampleCount;
 
             // VBRI is "fixed" size...  Yay. :)
-            var buf = new byte[26];
+            Span<byte> buf = stackalloc byte[26];
             if (Read(36, buf) != 26)
                 return null;
 
-            // Version
-            int version = buf[4] << 8 | buf[5];
-
-            // Delay
-            info.VBRDelay = buf[6] << 8 | buf[7];
-
-            // Quality
-            info.VBRQuality = buf[8] << 8 | buf[9];
-
-            // Bytes
-            info.VBRBytes = buf[10] << 24 | buf[11] << 16 | buf[12] << 8 | buf[13];
-
-            // Frames
-            info.VBRFrames = buf[14] << 24 | buf[15] << 16 | buf[16] << 8 | buf[17];
+            int version = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(4));
+            info.VBRDelay = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(6));
+            info.VBRQuality = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(8));
+            info.VBRBytes = BinaryPrimitives.ReadInt32BigEndian(buf.Slice(10));
+            info.VBRFrames = BinaryPrimitives.ReadInt32BigEndian(buf.Slice(14));
 
             // TOC
             // entries
-            int tocEntries = buf[18] << 8 | buf[19];
-            int tocScale = buf[20] << 8 | buf[21];
-            int tocEntrySize = buf[22] << 8 | buf[23];
-            int tocFramesPerEntry = buf[24] << 8 | buf[25];
+            int tocEntries = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(18));
+            int tocScale = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(20));
+            int tocEntrySize = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(22));
+            int tocFramesPerEntry = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(24));
             int tocSize = tocEntries * tocEntrySize;
 
             var toc = new byte[tocSize];

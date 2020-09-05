@@ -93,7 +93,7 @@ namespace NLayer.Decoder
 
             #region Tables
 
-            private static float[] icos72_table = {
+            private static float[] ICos72Table = {
                 5.004763425816599609063928255636710673570632934570312500000000e-01f,
                 5.019099187716736798492433990759309381246566772460937500000000e-01f,
                 5.043144802900764167574720886477734893560409545898437500000000e-01f,
@@ -213,6 +213,7 @@ namespace NLayer.Decoder
                 }
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveOptimization)]
             private static void LongIMDCT(ReadOnlySpan<float> invec, Span<float> outvec)
             {
                 Span<float> H = stackalloc float[17];
@@ -238,14 +239,15 @@ namespace NLayer.Decoder
                 Imdct_9pt(even, even_idct);
                 Imdct_9pt(odd, odd_idct);
 
+                var icos72table = ICos72Table.AsSpan(0, 35);
                 for (i = 0; i < 9; i++)
                 {
-                    odd_idct[i] *= ICOS36_A(i);
-                    h[i] = (even_idct[i] + odd_idct[i]) * ICOS72_A(i);
+                    odd_idct[i] *= icos72table[4 * i + 1];
+                    h[i] = (even_idct[i] + odd_idct[i]) * icos72table[2 * i];
                 }
                 for ( /* i = 9 */ ; i < 18; i++)
                 {
-                    h[i] = (even_idct[17 - i] - odd_idct[17 - i]) * ICOS72_A(i);
+                    h[i] = (even_idct[17 - i] - odd_idct[17 - i]) * icos72table[2 * i];
                 }
 
                 /* Rearrange the 18 values from the IDCT to the output vector */
@@ -278,16 +280,6 @@ namespace NLayer.Decoder
                 outvec[29] = outvec[24] = -h[2];
                 outvec[28] = outvec[25] = -h[1];
                 outvec[27] = outvec[26] = -h[0];
-            }
-
-            private static float ICOS72_A(int i)
-            {
-                return icos72_table[2 * i];
-            }
-
-            private static float ICOS36_A(int i)
-            {
-                return icos72_table[4 * i + 1];
             }
 
             private static void Imdct_9pt(ReadOnlySpan<float> invec, Span<float> outvec)
