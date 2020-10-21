@@ -174,11 +174,10 @@ namespace NLayer
                         bufferedCount = destination.Length;
 
                     readBuffer.Slice(_readBufOfs, bufferedCount).CopyTo(destination);
+                    destination = destination.Slice(bufferedCount);
 
                     // now update our counters...
                     samplesRead += bufferedCount;
-
-                    destination = destination.Slice(bufferedCount);
 
                     _position += bufferedCount * sizeof(float);
                     _readBufOfs += bufferedCount;

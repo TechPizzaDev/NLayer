@@ -103,7 +103,8 @@ namespace NLayer
 
             int decodedCount = decoder.DecodeFrame(frame, _ch0, _ch1);
 
-            if (frame.ChannelMode == MpegChannelMode.Mono)
+            if (frame.ChannelMode == MpegChannelMode.Mono ||
+                decoder.StereoMode != StereoMode.Both)
             {
                 _ch0.AsSpan(0, decodedCount).CopyTo(destination);
             }
@@ -112,7 +113,7 @@ namespace NLayer
                 // This is kinda annoying...  if we're doing a downmix,
                 // we should technically only output a single channel
                 // The problem is, our caller is probably expecting stereo output.  Grrrr....
-                
+
                 // TODO: optimize
                 for (int i = 0; i < decodedCount; i++)
                 {
