@@ -34,10 +34,14 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace NLayer.Decoder
 {
-    internal abstract class LayerDecoderBase
+    [SkipLocalsInit]
+    internal abstract unsafe class LayerDecoderBase
     {
         private const float INV_SQRT_2 = 7.071067811865474617150084668537e-01f;
 
@@ -45,7 +49,7 @@ namespace NLayer.Decoder
 
         #region Tables
 
-        private static float[] DEWINDOW_TABLE = {
+        private static float[] DEWINDOW_TABLE { get; } = {
              0.000000000f, -0.000015259f, -0.000015259f, -0.000015259f,
             -0.000015259f, -0.000015259f, -0.000015259f, -0.000030518f,
             -0.000030518f, -0.000030518f, -0.000030518f, -0.000045776f,
@@ -204,7 +208,7 @@ namespace NLayer.Decoder
         public abstract int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1);
 
         protected static Span<float> MapOutput(
-            int index, Span<int> mapping, Span<float> output0, Span<float> output1)
+            int index, int* mapping, Span<float> output0, Span<float> output1)
         {
             return (mapping[index]) switch
             {
@@ -240,7 +244,7 @@ namespace NLayer.Decoder
 
             DCT32(data, synBuf, k);
 
-            Span<float> ippuv = stackalloc float[512];
+            float* ippuv = stackalloc float[512];
             BuildUVec(ippuv, synBuf, k);
             DewindowOutput(ippuv, data);
         }
@@ -261,26 +265,25 @@ namespace NLayer.Decoder
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void DCT32(ReadOnlySpan<float> src, Span<float> dst, int k)
+        private static void DCT32(ReadOnlySpan<float> src, Span<float> dst, int k)
         {
-            Span<float> ei32 = stackalloc float[16];
-            Span<float> eo32 = stackalloc float[16];
-            Span<float> oi32 = stackalloc float[16];
-            Span<float> oo32 = stackalloc float[16];
-            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
+            float* ei32 = stackalloc float[16];
+            float* eo32 = stackalloc float[16];
+            float* oi32 = stackalloc float[16];
+            float* oo32 = stackalloc float[16];
 
-            int i;
+            ref float synthCos64Table = ref MemoryMarshal.GetArrayDataReference(SYNTH_COS64_TABLE);
 
-            for (i = 0; i < 16; i++)
+            for (int i = 0; i < 16; i++)
             {
                 ei32[i] = src[i] + src[31 - i];
-                oi32[i] = (src[i] - src[31 - i]) * synthCos64Table[2 * i];
+                oi32[i] = (src[i] - src[31 - i]) * Unsafe.Add(ref synthCos64Table, 2 * i);
             }
 
-            DCT16(ei32, eo32);
-            DCT16(oi32, oo32);
+            DCT16(ref synthCos64Table, ei32, eo32);
+            DCT16(ref synthCos64Table, oi32, oo32);
 
-            for (i = 0; i < 15; i++)
+            for (int i = 0; i < 15; i++)
             {
                 dst[2 * i + k] = eo32[i];
                 dst[2 * i + 1 + k] = oo32[i] + oo32[i + 1];
@@ -290,51 +293,50 @@ namespace NLayer.Decoder
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void DCT16(ReadOnlySpan<float> src, Span<float> dst)
+        private static void DCT16(ref float synthCos64Table, float* src, float* dst)
         {
-            Span<float> ei16 = stackalloc float[8];
-            Span<float> eo16 = stackalloc float[8];
-            Span<float> oi16 = stackalloc float[8];
-            Span<float> oo16 = stackalloc float[8];
-            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
+            float* ei16 = stackalloc float[8];
+            float* eo16 = stackalloc float[8];
+            float* oi16 = stackalloc float[8];
+            float* oo16 = stackalloc float[8];
 
             float a, b;
 
             a = src[0];
             b = src[15];
             ei16[0] = a + b;
-            oi16[0] = (a - b) * synthCos64Table[1];
+            oi16[0] = (a - b) * Unsafe.Add(ref synthCos64Table, 1);
             a = src[1];
             b = src[14];
             ei16[1] = a + b;
-            oi16[1] = (a - b) * synthCos64Table[5];
+            oi16[1] = (a - b) * Unsafe.Add(ref synthCos64Table, 5);
             a = src[2];
             b = src[13];
             ei16[2] = a + b;
-            oi16[2] = (a - b) * synthCos64Table[9];
+            oi16[2] = (a - b) * Unsafe.Add(ref synthCos64Table, 9);
             a = src[3];
             b = src[12];
             ei16[3] = a + b;
-            oi16[3] = (a - b) * synthCos64Table[13];
+            oi16[3] = (a - b) * Unsafe.Add(ref synthCos64Table, 13);
             a = src[4];
             b = src[11];
             ei16[4] = a + b;
-            oi16[4] = (a - b) * synthCos64Table[17];
+            oi16[4] = (a - b) * Unsafe.Add(ref synthCos64Table, 17);
             a = src[5];
             b = src[10];
             ei16[5] = a + b;
-            oi16[5] = (a - b) * synthCos64Table[21];
+            oi16[5] = (a - b) * Unsafe.Add(ref synthCos64Table, 21);
             a = src[6];
             b = src[9];
             ei16[6] = a + b;
-            oi16[6] = (a - b) * synthCos64Table[25];
+            oi16[6] = (a - b) * Unsafe.Add(ref synthCos64Table, 25);
             a = src[7];
             b = src[8];
             ei16[7] = a + b;
-            oi16[7] = (a - b) * synthCos64Table[29];
+            oi16[7] = (a - b) * Unsafe.Add(ref synthCos64Table, 29);
 
-            DCT8(ei16, eo16);
-            DCT8(oi16, oo16);
+            DCT8(ref synthCos64Table, ei16, eo16);
+            DCT8(ref synthCos64Table, oi16, oo16);
 
             dst[0] = eo16[0];
             dst[1] = oo16[0] + oo16[1];
@@ -355,15 +357,14 @@ namespace NLayer.Decoder
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void DCT8(ReadOnlySpan<float> src, Span<float> dst)
+        private static void DCT8(ref float synthCos64Table, float* src, float* dst)
         {
-            Span<float> ei8 = stackalloc float[4];
-            Span<float> tmp8 = stackalloc float[6];
-            Span<float> oi8 = stackalloc float[4];
-            Span<float> oo8 = stackalloc float[4];
-            var synthCos64Table = SYNTH_COS64_TABLE.AsSpan(0, 31);
+            float* ei8 = stackalloc float[4];
+            float* tmp8 = stackalloc float[6];
+            float* oi8 = stackalloc float[4];
+            float* oo8 = stackalloc float[4];
 
-            /* Even indices */
+            // Even indices 
             ei8[0] = src[0] + src[7];
             ei8[1] = src[3] + src[4];
             ei8[2] = src[1] + src[6];
@@ -371,8 +372,8 @@ namespace NLayer.Decoder
 
             tmp8[0] = ei8[0] + ei8[1];
             tmp8[1] = ei8[2] + ei8[3];
-            tmp8[2] = (ei8[0] - ei8[1]) * synthCos64Table[7];
-            tmp8[3] = (ei8[2] - ei8[3]) * synthCos64Table[23];
+            tmp8[2] = (ei8[0] - ei8[1]) * Unsafe.Add(ref synthCos64Table, 7);
+            tmp8[3] = (ei8[2] - ei8[3]) * Unsafe.Add(ref synthCos64Table, 23);
             tmp8[4] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
 
             dst[0] = tmp8[0] + tmp8[1];
@@ -380,16 +381,16 @@ namespace NLayer.Decoder
             dst[4] = (tmp8[0] - tmp8[1]) * INV_SQRT_2;
             dst[6] = tmp8[4];
 
-            /* Odd indices */
-            oi8[0] = (src[0] - src[7]) * synthCos64Table[3];
-            oi8[1] = (src[1] - src[6]) * synthCos64Table[11];
-            oi8[2] = (src[2] - src[5]) * synthCos64Table[19];
-            oi8[3] = (src[3] - src[4]) * synthCos64Table[27];
+            // Odd indices
+            oi8[0] = (src[0] - src[7]) * Unsafe.Add(ref synthCos64Table, 3);
+            oi8[1] = (src[1] - src[6]) * Unsafe.Add(ref synthCos64Table, 11);
+            oi8[2] = (src[2] - src[5]) * Unsafe.Add(ref synthCos64Table, 19);
+            oi8[3] = (src[3] - src[4]) * Unsafe.Add(ref synthCos64Table, 27);
 
             tmp8[0] = oi8[0] + oi8[3];
             tmp8[1] = oi8[1] + oi8[2];
-            tmp8[2] = (oi8[0] - oi8[3]) * synthCos64Table[7];
-            tmp8[3] = (oi8[1] - oi8[2]) * synthCos64Table[23];
+            tmp8[2] = (oi8[0] - oi8[3]) * Unsafe.Add(ref synthCos64Table, 7);
+            tmp8[3] = (oi8[1] - oi8[2]) * Unsafe.Add(ref synthCos64Table, 23);
             tmp8[4] = tmp8[2] + tmp8[3];
             tmp8[5] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
 
@@ -405,31 +406,68 @@ namespace NLayer.Decoder
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void BuildUVec(Span<float> u_vec, ReadOnlySpan<float> cur_synbuf, int k)
+        private static void BuildUVec(float* u_vec, ReadOnlySpan<float> cur_synbuf, int k)
         {
             int uvp = 0;
+            ref float synbuf = ref MemoryMarshal.GetReference(cur_synbuf);
 
             for (int j = 0; j < 8; j++)
             {
-                var su_vec = u_vec.Slice(uvp);
-                var synbuf1 = cur_synbuf.Slice(k, 32);
+                float* su_vec = u_vec + uvp;
+                ref float synbuf1 = ref Unsafe.Add(ref synbuf, k);
 
                 // Copy first 32 elements
-                for (int i = 0; i < 16; i++)
+                if (Sse.IsSupported)
                 {
-                    su_vec[i] = synbuf1[i + 16];
-                    su_vec[i + 17] = -synbuf1[31 - i];
+                    for (int i = 0; i < 16; i += Vector128<float>.Count)
+                    {
+                        var v0 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf1, i + 16));
+                        var v1 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf1, 31 - i - 4));
+
+                        v1 = Sse.Subtract(Vector128<float>.Zero, v1);
+                        v1 = Sse.Shuffle(v1, v1, 0b00_01_10_11); // reverse order
+
+                        Sse.Store(su_vec + i, v0);
+                        Sse.Store(su_vec + i + 17, v1);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < 16; i++)
+                    {
+                        su_vec[i] = Unsafe.Add(ref synbuf1, i + 16);
+                        su_vec[i + 17] = -Unsafe.Add(ref synbuf1, 31 - i);
+                    }
                 }
 
                 // k wraps at the synthesis buffer boundary  
                 k = (k + 32) & 511;
 
+                ref float synbuf2 = ref Unsafe.Add(ref synbuf, k);
+
                 // Copy next 32 elements
-                var synbuf2 = cur_synbuf.Slice(k, 17);
-                for (int i = 0; i < 16; i++)
+                if (Sse.IsSupported)
                 {
-                    su_vec[i + 32] = -synbuf2[16 - i];
-                    su_vec[i + 48] = -synbuf2[i];
+                    for (int i = 0; i < 16; i += Vector128<float>.Count)
+                    {
+                        var v0 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf2, 16 - i - 4));
+                        var v1 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf2, i));
+
+                        v0 = Sse.Shuffle(v0, v0, 0b00_01_10_11); // reverse order
+                        v0 = Sse.Subtract(Vector128<float>.Zero, v0);
+                        v1 = Sse.Subtract(Vector128<float>.Zero, v1);
+
+                        Sse.Store(su_vec + i + 32, v0);
+                        Sse.Store(su_vec + i + 48, v1);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < 16; i++)
+                    {
+                        su_vec[i + 32] = -Unsafe.Add(ref synbuf2, 16 - i);
+                        su_vec[i + 48] = -Unsafe.Add(ref synbuf2, i);
+                    }
                 }
                 su_vec[16] = 0;
 
@@ -439,51 +477,45 @@ namespace NLayer.Decoder
             }
         }
 
-        private void DewindowOutput(Span<float> u_vec, Span<float> samples)
+        private static void DewindowOutput(float* u_vec, Span<float> samples)
         {
-            if (u_vec.Length != 512)
-                throw new ArgumentException(nameof(u_vec));
+            ref float dewindowTable = ref MemoryMarshal.GetArrayDataReference(DEWINDOW_TABLE);
 
-            Span<float> s_uvec = u_vec;
-            Span<float> dewindowTable = DEWINDOW_TABLE.AsSpan(0, 512);
-
+            int j = 0;
             if (Vector.IsHardwareAccelerated)
             {
-                while (s_uvec.Length >= Vector<float>.Count)
+                for (; j < 512; j += Vector<float>.Count)
                 {
-                    var v_uvec = new Vector<float>(s_uvec);
-                    var v_dewindowTable = new Vector<float>(dewindowTable);
+                    Vector<float> v_uvec = Unsafe.ReadUnaligned<Vector<float>>(u_vec + j);
+                    Vector<float> v_dewindowTable = Unsafe.As<float, Vector<float>>(ref Unsafe.Add(ref dewindowTable, j));
 
-                    (v_uvec * v_dewindowTable).CopyTo(s_uvec);
-
-                    s_uvec = s_uvec.Slice(Vector<float>.Count);
-                    dewindowTable = dewindowTable.Slice(Vector<float>.Count);
+                    (v_uvec * v_dewindowTable).CopyTo(new Span<float>(u_vec + j, Vector<float>.Count));
                 }
             }
-            for (int j = 0; j < s_uvec.Length; j++)
-                s_uvec[j] *= dewindowTable[j];
+            for (; j < 512; j++)
+                u_vec[j] *= Unsafe.Add(ref dewindowTable, j);
 
             int i = 0;
             if (Vector.IsHardwareAccelerated)
             {
                 for (; i + Vector<float>.Count <= 32; i += Vector<float>.Count)
                 {
-                    var sum = new Vector<float>(u_vec.Slice(i));
-                    sum += new Vector<float>(u_vec.Slice(i + (1 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (2 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (3 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (4 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (5 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (6 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (7 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (8 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (9 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (10 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (11 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (12 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (13 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (14 << 5)));
-                    sum += new Vector<float>(u_vec.Slice(i + (15 << 5)));
+                    Vector<float> sum = Unsafe.ReadUnaligned<Vector<float>>(u_vec + i);
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (1 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (2 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (3 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (4 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (5 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (6 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (7 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (8 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (9 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (10 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (11 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (12 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (13 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (14 << 5)));
+                    sum += Unsafe.ReadUnaligned<Vector<float>>(u_vec + (i + (15 << 5)));
 
                     sum.CopyTo(samples.Slice(i));
                 }

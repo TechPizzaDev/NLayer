@@ -63,15 +63,32 @@ namespace NLayer
         public bool CanSeek => _reader.CanSeek;
 
         /// <summary>
-        /// Data length of decoded data in PCM bytes.
+        /// Data length of decoded data in samples.
         /// </summary>
-        public long? Length => _reader.SampleCount * _reader.Channels * sizeof(float);
+        public long? Length
+        {
+            get
+            {
+                long? sampleCount = _reader.SampleCount;
+                if (sampleCount.HasValue)
+                    return sampleCount.GetValueOrDefault() * _reader.Channels;
+                return default;
+            }
+        }
 
         /// <summary>
         /// Media duration of the Mpeg file.
         /// </summary>
-        public TimeSpan? Duration =>
-            TimeSpan.FromSeconds((double)_reader.SampleCount.GetValueOrDefault() / _reader.SampleRate);
+        public TimeSpan? Duration
+        {
+            get
+            {
+                long? sampleCount = _reader.SampleCount;
+                if (sampleCount.HasValue)
+                    return TimeSpan.FromSeconds((double)sampleCount.GetValueOrDefault() / _reader.SampleRate);
+                return default;
+            }
+        }
 
         /// <summary>
         /// Current decode position, represented by time. Calling the setter will result in a seeking operation.
@@ -118,7 +135,7 @@ namespace NLayer
                 if (sampleOffset != 0)
                 {
                     // throw away a frame (but allow the decoder to resync)
-                    var frame = _reader.NextFrame();
+                    Decoder.MpegFrame? frame = _reader.NextFrame();
                     _decoder.DecodeFrame(frame!, _readBuf);
                     newPos += sampleOffset;
                 }
@@ -196,7 +213,7 @@ namespace NLayer
                         break;
 
                     // decode the next frame (update _readBuf)
-                    var frame = _reader.NextFrame();
+                    Decoder.MpegFrame? frame = _reader.NextFrame();
                     if (frame == null)
                     {
                         _eofFound = true;

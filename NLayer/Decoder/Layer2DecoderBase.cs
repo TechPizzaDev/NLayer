@@ -10,7 +10,7 @@ namespace NLayer.Decoder
     // Layers I & II are basically identical...  
     // Layer II adds sample grouping, per subband allocation schemes, and granules
     // Because of this fact, we can use the same decoder for both
-    internal abstract class Layer2DecoderBase : LayerDecoderBase
+    internal abstract unsafe class Layer2DecoderBase : LayerDecoderBase
     {
         protected const int SSLIMIT = 12;
 
@@ -236,41 +236,42 @@ namespace NLayer.Decoder
             {
                 for (int ch = 0; ch < _channels; ch++)
                 {
+                    int[][] scalefac = _scalefac[ch];
                     switch (_scfsi[ch][sb])
                     {
                         case 0:
                             // all three
-                            _scalefac[ch][0][sb] = frame.ReadBits(6);
-                            _scalefac[ch][1][sb] = frame.ReadBits(6);
-                            _scalefac[ch][2][sb] = frame.ReadBits(6);
+                            scalefac[0][sb] = frame.ReadBits(6);
+                            scalefac[1][sb] = frame.ReadBits(6);
+                            scalefac[2][sb] = frame.ReadBits(6);
                             break;
 
                         case 1:
                             // only two (2 = 1)
-                            _scalefac[ch][0][sb] =
-                            _scalefac[ch][1][sb] = frame.ReadBits(6);
-                            _scalefac[ch][2][sb] = frame.ReadBits(6);
+                            scalefac[0][sb] =
+                            scalefac[1][sb] = frame.ReadBits(6);
+                            scalefac[2][sb] = frame.ReadBits(6);
                             break;
 
                         case 2:
                             // only one (3 = 2 = 1)
-                            _scalefac[ch][0][sb] =
-                            _scalefac[ch][1][sb] =
-                            _scalefac[ch][2][sb] = frame.ReadBits(6);
+                            scalefac[0][sb] =
+                            scalefac[1][sb] =
+                            scalefac[2][sb] = frame.ReadBits(6);
                             break;
 
                         case 3:
                             // only two (3 = 2)
-                            _scalefac[ch][0][sb] = frame.ReadBits(6);
-                            _scalefac[ch][1][sb] =
-                            _scalefac[ch][2][sb] = frame.ReadBits(6);
+                            scalefac[0][sb] = frame.ReadBits(6);
+                            scalefac[1][sb] =
+                            scalefac[2][sb] = frame.ReadBits(6);
                             break;
 
                         default:
                             // none
-                            _scalefac[ch][0][sb] = 63;
-                            _scalefac[ch][1][sb] = 63;
-                            _scalefac[ch][2][sb] = 63;
+                            scalefac[0][sb] = 63;
+                            scalefac[1][sb] = 63;
+                            scalefac[2][sb] = 63;
                             break;
                     }
                 }
@@ -289,6 +290,7 @@ namespace NLayer.Decoder
                     {
                         if (ch == 0 || sb < _jsbound)
                         {
+                            int[] samples = _samples[ch];
                             int alloc = _allocation[ch][sb];
                             if (alloc != 0)
                             {
@@ -298,30 +300,33 @@ namespace NLayer.Decoder
                                     int val = frame.ReadBits(-alloc);
                                     int levels = (1 << (-alloc / 2 + -alloc % 2 - 1)) + 1;
 
-                                    _samples[ch][idx] = val % levels;
+                                    samples[idx] = val % levels;
                                     val /= levels;
-                                    _samples[ch][idx + SBLIMIT] = val % levels;
-                                    _samples[ch][idx + SBLIMIT * 2] = val / levels;
+                                    samples[idx + SBLIMIT] = val % levels;
+                                    samples[idx + SBLIMIT * 2] = val / levels;
                                 }
                                 else
                                 {
                                     // non-grouping
                                     for (int gr = 0; gr < _granuleCount; gr++)
-                                        _samples[ch][idx + SBLIMIT * gr] = frame.ReadBits(alloc);
+                                        samples[idx + SBLIMIT * gr] = frame.ReadBits(alloc);
                                 }
                             }
                             else
                             {
                                 // no energy...  zero out the samples
                                 for (int gr = 0; gr < _granuleCount; gr++)
-                                    _samples[ch][idx + SBLIMIT * gr] = 0;
+                                    samples[idx + SBLIMIT * gr] = 0;
                             }
                         }
                         else
                         {
+                            int[] samples0 = _samples[0];
+                            int[] samples1 = _samples[1];
+
                             // copy chan 0 to chan 1
                             for (int gr = 0; gr < _granuleCount; gr++)
-                                _samples[1][idx + SBLIMIT * gr] = _samples[0][idx + SBLIMIT * gr];
+                                samples1[idx + SBLIMIT * gr] = samples0[idx + SBLIMIT * gr];
                         }
                     }
                 }
@@ -330,7 +335,7 @@ namespace NLayer.Decoder
 
         private int DecodeSamples(Span<float> ch0, Span<float> ch1)
         {
-            Span<int> channelMapping = stackalloc int[2];
+            int* channelMapping = stackalloc int[2];
 
             // do our stereo mode setup
             var startChannel = 0;

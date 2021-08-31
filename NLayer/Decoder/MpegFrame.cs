@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers.Binary;
+using System.Diagnostics;
 
 namespace NLayer.Decoder
 {
@@ -455,10 +456,15 @@ namespace NLayer.Decoder
             _bitsRead = 0;
         }
 
+        private static void ThrowEndOfStream()
+        {
+            throw new System.IO.EndOfStreamException();
+        }
+
         public int ReadBits(int bitCount)
         {
-            if (bitCount < 1 || bitCount > 32)
-                throw new ArgumentOutOfRangeException(nameof(bitCount));
+            Debug.Assert(bitCount > 0 && bitCount < 32);
+
             if (_isMuted)
                 return 0;
 
@@ -466,7 +472,7 @@ namespace NLayer.Decoder
             {
                 int b = ReadByte(_readOffset);
                 if (b == -1)
-                    throw new System.IO.EndOfStreamException();
+                    ThrowEndOfStream();
 
                 _readOffset++;
 

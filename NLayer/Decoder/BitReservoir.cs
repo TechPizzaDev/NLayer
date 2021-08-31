@@ -1,13 +1,17 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace NLayer.Decoder
 {
     internal class BitReservoir
     {
+        public const int BufferSize = 8192;
+
         // Per the spec, the maximum buffer size for layer III is 7680 bits, which is 960 bytes.
         // The only catch is if we're decoding a "free" frame, which could be a lot more (since
         //  some encoders allow higher bitrates to maintain audio transparency).
-        private byte[] _buf = new byte[8192];
+        private byte[] _buf = new byte[BufferSize];
         private int _start = 0, _end = -1, _bitsLeft = 0;
         private long _bitsRead = 0L;
 
@@ -34,10 +38,10 @@ namespace NLayer.Decoder
             {
                 int tmp = frame.ReadBits(8);
                 if (tmp == -1)
-                    throw new System.IO.InvalidDataException("Frame did not have enough bytes!");
+                    ThrowFrameNotEnoughBytes();
 
                 _buf[++_end] = (byte)tmp;
-                if (_end == _buf.Length - 1)
+                if (_end == BufferSize - 1)
                     _end = -1;
             }
 
@@ -53,9 +57,9 @@ namespace NLayer.Decoder
                 // it's not the start of the stream so calculate _start based on whether we have enough bytes left
 
                 // if we have enough bytes, reset start to match overlap
-                if ((originalEnd + 1 - _start + _buf.Length) % _buf.Length >= overlap)
+                if ((originalEnd + 1 - _start + BufferSize) % BufferSize >= overlap)
                 {
-                    _start = (originalEnd + 1 - overlap + _buf.Length) % _buf.Length;
+                    _start = (originalEnd + 1 - overlap + BufferSize) % BufferSize;
                     return true;
                 }
                 // otherwise, just set start to match the start of the frame (we probably skipped a frame)
@@ -71,10 +75,9 @@ namespace NLayer.Decoder
         {
             int bits = TryPeekBits(count, out int bitsRead);
             if (bitsRead < count)
-                throw new System.IO.InvalidDataException("Reservoir did not have enough bytes!");
+                ThrowReservoirNotEnoughBits();
 
             SkipBits(count);
-
             return bits;
         }
 
@@ -82,7 +85,7 @@ namespace NLayer.Decoder
         public int Get1Bit()
         {
             if (_bitsLeft == 0)
-                throw new System.IO.InvalidDataException("Reservoir did not have enough bytes!");
+                ThrowReservoirNotEnoughBits();
 
             _bitsLeft--;
             _bitsRead++;
@@ -90,7 +93,7 @@ namespace NLayer.Decoder
 
             if (_bitsLeft == 0)
             {
-                if (++_start >= _buf.Length)
+                if (++_start >= BufferSize)
                     _start = 0;
 
                 if (_start != _end + 1)
@@ -102,31 +105,34 @@ namespace NLayer.Decoder
 
         public int TryPeekBits(int count, out int readCount)
         {
-            if (count < 0 || count > 32)
-                throw new ArgumentOutOfRangeException(nameof(count), "Must return between 0 and 32 bits.");
+            Debug.Assert(count >= 0 && count < 32, "Count must be between 0 and 32 bits.");
+
+            int bitsLeft = _bitsLeft;
 
             // if we don't have any bits left, just return no bits read
-            if (_bitsLeft == 0 || count == 0)
+            if (bitsLeft == 0 || count == 0)
             {
                 readCount = 0;
                 return 0;
             }
 
+            byte[] buf = _buf;
+
             // get bits from the current start of the reservoir
-            int bits = _buf[_start];
-            if (count < _bitsLeft)
+            int bits = buf[_start];
+            if (count < bitsLeft)
             {
                 // just grab the bits, adjust the "left" count, and return
-                bits >>= _bitsLeft - count;
+                bits >>= bitsLeft - count;
                 bits &= (1 << count) - 1;
                 readCount = count;
                 return bits;
             }
 
             // we have to do it the hard way...
-            bits &= (1 << _bitsLeft) - 1;
-            count -= _bitsLeft;
-            readCount = _bitsLeft;
+            bits &= (1 << bitsLeft) - 1;
+            count -= bitsLeft;
+            readCount = bitsLeft;
 
             int resStart = _start;
 
@@ -134,7 +140,7 @@ namespace NLayer.Decoder
             // advance the start marker, and if we just advanced it past the end of the buffer, bail
             while (count > 0)
             {
-                if (++resStart >= _buf.Length)
+                if (++resStart >= BufferSize)
                     resStart = 0;
                 else if (resStart == _end + 1)
                     break;
@@ -144,7 +150,7 @@ namespace NLayer.Decoder
 
                 // move the existing bits over
                 bits <<= bitsToRead;
-                bits |= _buf[resStart] >> (8 - bitsToRead);
+                bits |= buf[resStart] >> (8 - bitsToRead);
 
                 // update our count
                 count -= bitsToRead;
@@ -161,7 +167,7 @@ namespace NLayer.Decoder
             get
             {
                 if (_bitsLeft > 0)
-                    return ((_end - _start + _buf.Length) % _buf.Length * 8) + _bitsLeft;
+                    return ((_end - _start + BufferSize) % BufferSize * 8) + _bitsLeft;
 
                 return 0;
             }
@@ -174,12 +180,11 @@ namespace NLayer.Decoder
             if (count > 0)
             {
                 // make sure we have enough bits to skip
-                if (count > BitsAvailable)
-                    throw new ArgumentOutOfRangeException(nameof(count));
+                Debug.Assert(count <= BitsAvailable);
 
                 // now calculate the new positions
                 int offset = (8 - _bitsLeft) + count;
-                _start = ((offset / 8) + _start) % _buf.Length;
+                _start = ((offset / 8) + _start) % BufferSize;
                 _bitsLeft = 8 - (offset % 8);
 
                 _bitsRead += count;
@@ -199,7 +204,7 @@ namespace NLayer.Decoder
 
             while (_start < 0)
             {
-                _start += _buf.Length;
+                _start += BufferSize;
             }
         }
 
@@ -216,6 +221,16 @@ namespace NLayer.Decoder
             _start = 0;
             _end = -1;
             _bitsLeft = 0;
+        }
+
+        private static void ThrowReservoirNotEnoughBits()
+        {
+            throw new System.IO.InvalidDataException("Reservoir did not have enough bytes!");
+        }
+
+        private static void ThrowFrameNotEnoughBytes()
+        {
+            throw new System.IO.InvalidDataException("Frame did not have enough bytes!");
         }
     }
 }

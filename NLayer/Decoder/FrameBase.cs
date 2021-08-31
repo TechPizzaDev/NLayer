@@ -61,11 +61,9 @@ namespace NLayer.Decoder
         {
             if (_savedBuffer != null)
             {
-                if (offset < 0)
-                    throw new ArgumentOutOfRangeException();
+                Debug.Assert(offset >= 0);
                 if (offset >= _savedBuffer.Length)
                     return -1;
-
                 return _savedBuffer[offset];
             }
             else
