@@ -422,7 +422,7 @@ namespace NLayer.Decoder
                     for (int i = 0; i < 16; i += Vector128<float>.Count)
                     {
                         var v0 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf1, i + 16));
-                        var v1 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf1, 31 - i - 4));
+                        var v1 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf1, 31 - i - Vector128<float>.Count));
 
                         v1 = Sse.Subtract(Vector128<float>.Zero, v1);
                         v1 = Sse.Shuffle(v1, v1, 0b00_01_10_11); // reverse order
@@ -450,7 +450,7 @@ namespace NLayer.Decoder
                 {
                     for (int i = 0; i < 16; i += Vector128<float>.Count)
                     {
-                        var v0 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf2, 16 - i - 4));
+                        var v0 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf2, 16 - i - Vector128<float>.Count));
                         var v1 = Unsafe.As<float, Vector128<float>>(ref Unsafe.Add(ref synbuf2, i));
 
                         v0 = Sse.Shuffle(v0, v0, 0b00_01_10_11); // reverse order

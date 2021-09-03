@@ -784,7 +784,7 @@ namespace NLayer.Decoder
             _floatLookup = floatLookup;
         }
 
-        private static HuffmanListNode[] _llCache = new HuffmanListNode[_codeTables.Length];
+        private static HuffmanListNode[][] _llCache = new HuffmanListNode[_codeTables.Length][];
         private static int[] _llCacheMaxBits = new int[_codeTables.Length];
 
         private static ReadOnlySpan<byte> LIN_BITS => new byte[]
@@ -852,42 +852,44 @@ namespace NLayer.Decoder
         private static byte DecodeSymbol(BitReservoir br, nint table)
         {
             // get the huffman node for decoding
-            HuffmanListNode? node = GetNode(table, out int maxBits);
+            HuffmanListNode[] nodes = GetNode(table, out int maxBits);
 
             // get some bits to work with
             int bits = br.TryPeekBits(maxBits, out int readBits);
-            if (readBits < maxBits)
-                bits <<= maxBits - readBits;
+            bits <<= maxBits - readBits;
 
             // try to find the correct node
-            while (node != null && node.Length <= readBits)
-            {
-                if ((bits & node.Mask) == node.Bits)
-                {
-                    // make sure we have enough bits to skip
-                    if (node.Length > br.BitsAvailable)
-                        ThrowInvalidData();
+            ref HuffmanListNode node = ref MemoryMarshal.GetArrayDataReference(nodes);
 
-                    // found it!  Advance the read counter
-                    br.SkipBits(node.Length);
+            int i = 0;
+            for (; i < nodes.Length; i++)
+            {
+                node = ref nodes[i];
+                if (node.Length > readBits)
                     break;
-                }
-                node = node.Next;
+
+                if ((bits & node.Mask) == node.Bits)
+                    break;
             }
 
-            // apply the value
-            if (node != null && node.Length <= readBits)
-            {
-                return node.Value;
-            }
-            else
+            if (i == nodes.Length)
             {
                 // should we advance the reader????  need to check the spec
                 return 0;
             }
+
+            // make sure we have enough bits to skip
+            if (node.Length > br.BitsAvailable)
+                ThrowInvalidData();
+
+            // found it!  Advance the read counter
+            br.SkipBits(node.Length);
+
+            // apply the value
+            return node.Value;
         }
 
-        private static HuffmanListNode GetNode(nint table, out int maxBits)
+        private static HuffmanListNode[] GetNode(nint table, out int maxBits)
         {
             nint realIdx = table;
             if (realIdx > 16)
@@ -931,7 +933,7 @@ namespace NLayer.Decoder
             return _llCache[realIdx];
         }
 
-        private static HuffmanListNode InitTable(byte[,] tree, out int maxBits)
+        private static HuffmanListNode[] InitTable(byte[,] tree, out int maxBits)
         {
             var values = new List<byte>();
             var lengths = new List<int>();
@@ -995,7 +997,7 @@ namespace NLayer.Decoder
             throw new InvalidOperationException();
         }
 
-        private static HuffmanListNode BuildLinkedList(
+        private static HuffmanListNode[] BuildLinkedList(
             List<byte> values, List<int> lengthList, List<int> codeList, out int maxBits)
         {
             var list = new HuffmanListNode[lengthList.Count];
@@ -1023,21 +1025,15 @@ namespace NLayer.Decoder
             // we don't care about equal-length entries (in fact, they should already be in the "correct" order)
             Array.Sort(list, (i1, i2) => i1.Length - i2.Length);
 
-            for (int i = 1; i < list.Length && list[i].Length < 99999; i++)
-                list[i - 1].Next = list[i];
-
-            return list[0];
+            return list;
         }
 
-        private class HuffmanListNode
+        private struct HuffmanListNode
         {
-            public byte Value;
-
             public int Length;
             public int Bits;
             public int Mask;
-
-            public HuffmanListNode? Next;
+            public byte Value;
         }
     }
 }
