@@ -326,25 +326,33 @@ namespace NLayer.Decoder
 
             private static void Imdct_9pt(float* invec, float* outvec)
             {
-                float* even_idct = stackalloc float[5];
-                float* odd_idct = stackalloc float[4];
+                float even_idct0;
+                float even_idct1;
+                float even_idct2;
+                float even_idct3;
+                float even_idct4;
+
+                float odd_idct0;
+                float odd_idct1;
+                float odd_idct2;
+                float odd_idct3;
 
                 // BEGIN 5 Point IMDCT 
                 float t0 = invec[6] / 2.0f + invec[0];
                 float t1 = invec[0] - invec[6];
                 float t2 = invec[2] - invec[4] - invec[8];
 
-                even_idct[0] = t0 + invec[2] * 0.939692621f
+                even_idct0 = t0 + invec[2] * 0.939692621f
                     + invec[4] * 0.766044443f + invec[8] * 0.173648178f;
 
-                even_idct[1] = t2 / 2.0f + t1;
-                even_idct[2] = t0 - invec[2] * 0.173648178f
+                even_idct1 = t2 / 2.0f + t1;
+                even_idct2 = t0 - invec[2] * 0.173648178f
                     - invec[4] * 0.939692621f + invec[8] * 0.766044443f;
 
-                even_idct[3] = t0 - invec[2] * 0.766044443f
+                even_idct3 = t0 - invec[2] * 0.766044443f
                     + invec[4] * 0.173648178f - invec[8] * 0.939692621f;
 
-                even_idct[4] = t1 - t2;
+                even_idct4 = t1 - t2;
                 // END 5 Point IMDCT 
 
                 // BEGIN 4 Point IMDCT 
@@ -353,36 +361,36 @@ namespace NLayer.Decoder
                     float odd2 = invec[3] + invec[5];
                     t0 = (invec[5] + invec[7]) * 0.5f + invec[1];
 
-                    odd_idct[0] = t0 + odd1 * 0.939692621f + odd2 * 0.766044443f;
-                    odd_idct[1] = (invec[1] - invec[5]) * 1.5f - invec[7];
-                    odd_idct[2] = t0 - odd1 * 0.173648178f - odd2 * 0.939692621f;
-                    odd_idct[3] = t0 - odd1 * 0.766044443f + odd2 * 0.173648178f;
+                    odd_idct0 = t0 + odd1 * 0.939692621f + odd2 * 0.766044443f;
+                    odd_idct1 = (invec[1] - invec[5]) * 1.5f - invec[7];
+                    odd_idct2 = t0 - odd1 * 0.173648178f - odd2 * 0.939692621f;
+                    odd_idct3 = t0 - odd1 * 0.766044443f + odd2 * 0.173648178f;
                 }
                 // END 4 Point IMDCT 
 
                 // Adjust for non power of 2 IDCT 
-                odd_idct[0] += invec[7] * 0.173648178f;
-                odd_idct[1] -= invec[7] * 0.5f;
-                odd_idct[2] += invec[7] * 0.766044443f;
-                odd_idct[3] -= invec[7] * 0.939692621f;
+                odd_idct0 += invec[7] * 0.173648178f;
+                odd_idct1 -= invec[7] * 0.5f;
+                odd_idct2 += invec[7] * 0.766044443f;
+                odd_idct3 -= invec[7] * 0.939692621f;
 
                 // Post-Twiddle 
-                odd_idct[0] *= 0.5f / 0.984807753f;
-                odd_idct[1] *= 0.5f / 0.866025404f;
-                odd_idct[2] *= 0.5f / 0.64278761f;
-                odd_idct[3] *= 0.5f / 0.342020143f;
+                odd_idct0 *= 0.5f / 0.984807753f;
+                odd_idct1 *= 0.5f / 0.866025404f;
+                odd_idct2 *= 0.5f / 0.64278761f;
+                odd_idct3 *= 0.5f / 0.342020143f;
 
-                outvec[0] = even_idct[0] + odd_idct[0];
-                outvec[1] = even_idct[1] + odd_idct[1];
-                outvec[2] = even_idct[2] + odd_idct[2];
-                outvec[3] = even_idct[3] + odd_idct[3];
-                outvec[4] = even_idct[4];
+                outvec[0] = even_idct0 + odd_idct0;
+                outvec[1] = even_idct1 + odd_idct1;
+                outvec[2] = even_idct2 + odd_idct2;
+                outvec[3] = even_idct3 + odd_idct3;
+                outvec[4] = even_idct4;
 
                 // Mirror into the other half of the vector 
-                outvec[5] = even_idct[3] - odd_idct[3];
-                outvec[6] = even_idct[2] - odd_idct[2];
-                outvec[7] = even_idct[1] - odd_idct[1];
-                outvec[8] = even_idct[0] - odd_idct[0];
+                outvec[5] = even_idct3 - odd_idct3;
+                outvec[6] = even_idct2 - odd_idct2;
+                outvec[7] = even_idct1 - odd_idct1;
+                outvec[8] = even_idct0 - odd_idct0;
             }
 
             private static void ShortImpl(Span<float> fsIn, int sbStart, Span<float> nextBlock)

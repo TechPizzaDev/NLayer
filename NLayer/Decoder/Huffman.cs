@@ -868,6 +868,7 @@ namespace NLayer.Decoder
                 if (node.Length > readBits)
                     break;
 
+                // TODO: Binary search?
                 if ((bits & node.Mask) == node.Bits)
                     break;
             }
