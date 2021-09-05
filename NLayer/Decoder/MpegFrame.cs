@@ -4,7 +4,7 @@ using System.Diagnostics;
 
 namespace NLayer.Decoder
 {
-    internal class MpegFrame : FrameBase, IMpegFrame
+    public sealed class MpegFrame : FrameBase, IMpegFrame
     {
         private static readonly int[][][] _bitRateTable =
         {
@@ -212,7 +212,7 @@ namespace NLayer.Decoder
             crc &= 0xFFFF;
         }
 
-        public VBRInfo? ParseVBR()
+        public bool ParseVBR(out VBRInfo info)
         {
             Span<byte> buf = stackalloc byte[4];
 
@@ -225,33 +225,38 @@ namespace NLayer.Decoder
             else
                 offset = 17 + 4;
 
-            if (Read(offset, buf) != 4)
-                return null;
+            if (Read(offset, buf) == 4)
+            {
+                if (buf[0] == 'X' && buf[1] == 'i' && buf[2] == 'n' && buf[3] == 'g' ||
+                    buf[0] == 'I' && buf[1] == 'n' && buf[2] == 'f' && buf[3] == 'o')
+                {
+                    return ParseXing(offset + 4, out info);
+                }
 
-            if (buf[0] == 'X' && buf[1] == 'i' && buf[2] == 'n' && buf[3] == 'g' ||
-                buf[0] == 'I' && buf[1] == 'n' && buf[2] == 'f' && buf[3] == 'o')
-                return ParseXing(offset + 4);
+                // then VBRI (kinda rare)
+                if (Read(36, buf) == 4)
+                {
+                    if (buf[0] == 'V' && buf[1] == 'B' && buf[2] == 'R' && buf[3] == 'I')
+                    {
+                        return ParseVBRI(out info);
+                    }
+                }
+            }
 
-            // then VBRI (kinda rare)
-            if (Read(36, buf) != 4)
-                return null;
-
-            if (buf[0] == 'V' && buf[1] == 'B' && buf[2] == 'R' && buf[3] == 'I')
-                return ParseVBRI();
-
-            return null;
+            info = default;
+            return false;
         }
 
-        private VBRInfo? ParseXing(int offset)
+        private bool ParseXing(int offset, out VBRInfo info)
         {
-            var info = new VBRInfo();
+            info = new VBRInfo();
             info.Channels = Channels;
             info.SampleRate = SampleRate;
             info.SampleCount = SampleCount;
 
             Span<byte> buf = stackalloc byte[100];
             if (Read(offset, buf.Slice(0, 4)) != 4)
-                return null;
+                return false;
             offset += 4;
 
             int flags = BinaryPrimitives.ReadInt32BigEndian(buf);
@@ -260,7 +265,7 @@ namespace NLayer.Decoder
             if ((flags & 0x1) != 0)
             {
                 if (Read(offset, buf.Slice(0, 4)) != 4)
-                    return null;
+                    return false;
                 offset += 4;
                 info.VBRFrames = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
@@ -269,7 +274,7 @@ namespace NLayer.Decoder
             if ((flags & 0x2) != 0)
             {
                 if (Read(offset, buf.Slice(0, 4)) != 4)
-                    return null;
+                    return false;
                 offset += 4;
                 info.VBRBytes = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
@@ -279,7 +284,7 @@ namespace NLayer.Decoder
             {
                 // we're not using the TOC, so just discard it
                 if (Read(offset, buf) != 100)
-                    return null;
+                    return false;
                 offset += 100;
             }
 
@@ -287,7 +292,7 @@ namespace NLayer.Decoder
             if ((flags & 0x8) != 0)
             {
                 if (Read(offset, buf.Slice(0, 4)) != 4)
-                    return null;
+                    return false;
                 offset += 4;
                 info.VBRQuality = BinaryPrimitives.ReadInt32BigEndian(buf);
             }
@@ -312,14 +317,15 @@ namespace NLayer.Decoder
             //    var rgPeak = BitConverter.ToSingle(buf, 11);
             //    var rgGainRadio = buf[15] << 8 | buf[16];
             //    var rgGain = buf[17] << 8 | buf[18];
-            //} while (false);
+            //}
+            //while (false);
 
-            return info;
+            return true;
         }
 
-        private VBRInfo? ParseVBRI()
+        private bool ParseVBRI(out VBRInfo info)
         {
-            var info = new VBRInfo();
+            info = new VBRInfo();
             info.Channels = Channels;
             info.SampleRate = SampleRate;
             info.SampleCount = SampleCount;
@@ -327,7 +333,7 @@ namespace NLayer.Decoder
             // VBRI is "fixed" size...  Yay. :)
             Span<byte> buf = stackalloc byte[26];
             if (Read(36, buf) != 26)
-                return null;
+                return false;
 
             int version = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(4));
             info.VBRDelay = BinaryPrimitives.ReadInt16BigEndian(buf.Slice(6));
@@ -345,9 +351,9 @@ namespace NLayer.Decoder
 
             var toc = new byte[tocSize];
             if (Read(62, toc) != tocSize)
-                return null;
+                return false;
 
-            return info;
+            return true;
         }
 
         public int FrameLength => Length;

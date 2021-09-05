@@ -19,7 +19,7 @@ namespace NLayer.Decoder
 
         // figure out which rate table to use...  
         // basically, high-rate full, high-rate limited, low-rate limited, low-rate minimal, and LSF.
-        private static int[] SelectTable(IMpegFrame frame)
+        private static int[] SelectTable(MpegFrame frame)
         {
             var bitRatePerChannel = (frame.BitRate / (frame.ChannelMode == MpegChannelMode.Mono ? 1 : 2)) / 1000;
 
@@ -74,12 +74,12 @@ namespace NLayer.Decoder
             new int[] { 2,  0, -5, -7,  3 },                                                 // 7 (II, 4, 2 bits per alloc)
         };
 
-        protected override int[] GetRateTable(IMpegFrame frame)
+        protected override int[] GetRateTable(MpegFrame frame)
         {
             return SelectTable(frame);
         }
 
-        protected override void ReadScaleFactorSelection(IMpegFrame frame, int[][] scfsi, int channels)
+        protected override void ReadScaleFactorSelection(MpegFrame frame, int[][] scfsi, int channels)
         {
             // we'll never have more than 30 active subbands
             for (int sb = 0; sb < 30; sb++)

@@ -28,12 +28,12 @@ namespace NLayer.Decoder
             return GetCRC(frame, _rateTable, _allocLookupTable, false, ref crc);
         }
 
-        protected override int[] GetRateTable(IMpegFrame frame)
+        protected override int[] GetRateTable(MpegFrame frame)
         {
             return _rateTable;
         }
 
-        protected override void ReadScaleFactorSelection(IMpegFrame frame, int[][] scfsi, int channels)
+        protected override void ReadScaleFactorSelection(MpegFrame frame, int[][] scfsi, int channels)
         {
             // this is a no-op since the base logic uses "2" as the "has energy" marker
         }

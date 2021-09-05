@@ -1,12 +1,13 @@
 ﻿using System;
+using NLayer.Decoder;
 
 namespace NLayer
 {
     public class MpegFrameDecoder
     {
-        private Decoder.Layer1Decoder? _layer1Decoder;
-        private Decoder.Layer2Decoder? _layer2Decoder;
-        private Decoder.Layer3Decoder? _layer3Decoder;
+        private Layer1Decoder? _layer1Decoder;
+        private Layer2Decoder? _layer2Decoder;
+        private Layer3Decoder? _layer3Decoder;
         private float[]? _eqFactors;
 
         // channel buffers for getting data out of the decoders...
@@ -66,29 +67,29 @@ namespace NLayer
         /// <param name="frame">The Mpeg frame to be decoded.</param>
         /// <param name="destination">The buffer to fill with PCM samples.</param>
         /// <returns>The actual amount of samples read.</returns>
-        public int DecodeFrame(IMpegFrame frame, Span<float> destination)
+        public int DecodeFrame(MpegFrame frame, Span<float> destination)
         {
             if (frame == null)
                 throw new ArgumentNullException(nameof(frame));
 
-            Decoder.LayerDecoderBase decoder;
+            LayerDecoderBase decoder;
             switch (frame.Layer)
             {
                 case MpegLayer.LayerI:
                     if (_layer1Decoder == null)
-                        _layer1Decoder = new Decoder.Layer1Decoder();
+                        _layer1Decoder = new Layer1Decoder();
                     decoder = _layer1Decoder;
                     break;
 
                 case MpegLayer.LayerII:
                     if (_layer2Decoder == null)
-                        _layer2Decoder = new Decoder.Layer2Decoder();
+                        _layer2Decoder = new Layer2Decoder();
                     decoder = _layer2Decoder;
                     break;
 
                 case MpegLayer.LayerIII:
                     if (_layer3Decoder == null)
-                        _layer3Decoder = new Decoder.Layer3Decoder();
+                        _layer3Decoder = new Layer3Decoder();
                     decoder = _layer3Decoder;
                     break;
 
@@ -103,10 +104,13 @@ namespace NLayer
 
             int decodedCount = decoder.DecodeFrame(frame, _ch0, _ch1);
 
+            float[] ch0 = _ch0;
+            float[] ch1 = _ch1;
+
             if (frame.ChannelMode == MpegChannelMode.Mono ||
                 decoder.StereoMode != StereoMode.Both)
             {
-                _ch0.AsSpan(0, decodedCount).CopyTo(destination);
+                ch0.AsSpan(0, decodedCount).CopyTo(destination);
             }
             else
             {
@@ -117,8 +121,8 @@ namespace NLayer
                 // TODO: optimize
                 for (int i = 0; i < decodedCount; i++)
                 {
-                    destination[i * 2 + 0] = _ch0[i];
-                    destination[i * 2 + 1] = _ch1[i];
+                    destination[i * 2 + 0] = ch0[i];
+                    destination[i * 2 + 1] = ch1[i];
                 }
                 decodedCount *= 2;
             }

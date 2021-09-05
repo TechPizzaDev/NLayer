@@ -4,16 +4,17 @@ using System.IO;
 
 namespace NLayer.Decoder
 {
-    internal class MpegStreamReader
+    public class MpegStreamReader
     {
         private Stream _stream;
         private ID3Frame? _id3Frame, _id3v1Frame;
         private RiffHeaderFrame? _riffHeaderFrame;
-        private VBRInfo? _vbrInfo;
+        private VBRInfo _vbrInfo;
+        private bool _hasVbrInfo;
         private MpegFrame? _first, _current, _last, _lastFree;
         private long _readOffset, _eofOffset;
         private bool _endFound, _mixedFrameSize;
-        
+
         public bool CanSeek => _stream.CanSeek;
 
         public MpegStreamReader(Stream source)
@@ -77,7 +78,7 @@ namespace NLayer.Decoder
 
                                     _readOffset += f.Length;
                                     DiscardThrough(_readOffset, true);
-                                    
+
                                     _id3Frame = f;
                                     return _id3Frame;
                                 }
@@ -104,15 +105,12 @@ namespace NLayer.Decoder
                         var frame = MpegFrame.TrySync(sync);
                         if (frame != null)
                         {
-                            if (frame.ValidateFrameHeader(_readOffset, this)
-                               && !(freeFrame != null
-                                   && (frame.Layer != freeFrame.Layer
-                                      || frame.Version != freeFrame.Version
-                                      || frame.SampleRate != freeFrame.SampleRate
-                                      || frame.BitRateIndex > 0
-                                      )
-                                   )
-                               )
+                            if (frame.ValidateFrameHeader(_readOffset, this) &&
+                                !(freeFrame != null && (
+                                    frame.Layer != freeFrame.Layer ||
+                                    frame.Version != freeFrame.Version ||
+                                    frame.SampleRate != freeFrame.SampleRate ||
+                                    frame.BitRateIndex > 0)))
                             {
                                 if (!CanSeek)
                                 {
@@ -124,7 +122,7 @@ namespace NLayer.Decoder
 
                                 if (_first == null)
                                 {
-                                    if (_vbrInfo == null && (_vbrInfo = frame.ParseVBR()) != null)
+                                    if (!_hasVbrInfo && (_hasVbrInfo = frame.ParseVBR(out _vbrInfo)))
                                     {
                                         return FindNextFrame();
                                     }
@@ -195,8 +193,8 @@ namespace NLayer.Decoder
                             DiscardThrough(_readOffset, true);
 
                         syncBuf.Slice(1, 3).CopyTo(syncBuf);
-
-                    } while (Read(_readOffset + 3, syncBuf.Slice(3, 1)) == 1);
+                    } 
+                    while (Read(_readOffset + 3, syncBuf.Slice(3, 1)) == 1);
                 }
 
                 // move the "end of frame" marker for the last free format frame (in case we have one)
@@ -530,9 +528,7 @@ namespace NLayer.Decoder
 
         public int ReadByte(long offset)
         {
-            if (offset < 0)
-                throw new ArgumentOutOfRangeException(nameof(offset));
-
+            Debug.Assert(offset >= 0);
             return _readBuf.ReadByte(this, offset);
         }
 
@@ -551,7 +547,7 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_vbrInfo != null)
+                if (_hasVbrInfo)
                     return _vbrInfo.VBRStreamSampleCount;
 
                 if (!CanSeek)
@@ -567,7 +563,7 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_vbrInfo != null)
+                if (_hasVbrInfo)
                     return _vbrInfo.SampleRate;
                 Debug.Assert(_first != null);
                 return _first.SampleRate;
@@ -578,7 +574,7 @@ namespace NLayer.Decoder
         {
             get
             {
-                if (_vbrInfo != null)
+                if (_hasVbrInfo)
                     return _vbrInfo.Channels;
                 Debug.Assert(_first != null);
                 return _first.Channels;
@@ -658,7 +654,8 @@ namespace NLayer.Decoder
                     do
                     {
                         FindNextFrame();
-                    } while (frame == _last && !_endFound);
+                    }
+                    while (frame == _last && !_endFound);
                 }
 
                 _current = frame.Next;

@@ -165,60 +165,61 @@ namespace NLayer.Decoder
                 _prevBlock[channel] = nextBlock;
             }
 
-            internal void Apply(Span<float> fsIn, int channel, int blockType, bool doMixed)
+            internal void Apply(ref float fsIn, int channel, int blockType, bool doMixed)
             {
                 // get the previous & next blocks so we can overlap correctly
                 //  NB: we swap each pass so we can add the previous block in a single pass
                 GetPrevBlock(channel, out float[] prevBlock, out float[] nextBlock);
+
+                ref float rPrevBlock = ref MemoryMarshal.GetArrayDataReference(prevBlock);
+                ref float rNextBlock = ref MemoryMarshal.GetArrayDataReference(nextBlock);
 
                 // now we have a few options for processing blocks...
                 int start = 0;
                 if (doMixed)
                 {
                     // a mixed block always has the first two subbands as blocktype 0
-                    LongImpl(fsIn, 0, 2, nextBlock, 0);
+                    LongImpl(ref fsIn, 0, 2, ref rNextBlock, 0);
                     start = 2;
                 }
 
                 if (blockType == 2)
                     // this is the only place we care about short blocks
-                    ShortImpl(fsIn, start, nextBlock);
+                    ShortImpl(ref fsIn, start, ref rNextBlock);
                 else
-                    LongImpl(fsIn, start, SBLIMIT, nextBlock, blockType);
+                    LongImpl(ref fsIn, start, SBLIMIT, ref rNextBlock, blockType);
 
                 // overlap
-                ref float rFsIn = ref MemoryMarshal.GetReference(fsIn);
-                ref float rPrevBlock = ref MemoryMarshal.GetArrayDataReference(prevBlock);
 
-                for (int i = 0; i < SSLIMIT * SBLIMIT; i++)
-                    Unsafe.Add(ref rFsIn, i) += Unsafe.Add(ref rPrevBlock, i);
+                for (nint i = 0; i < SSLIMIT * SBLIMIT; i++)
+                    Unsafe.Add(ref fsIn, i) += Unsafe.Add(ref rPrevBlock, i);
             }
 
-            private static void LongImpl(Span<float> fsIn, int sbStart, int sbLimit, Span<float> nextBlock, int blockType)
+            private static void LongImpl(ref float fsIn, int sbStart, int sbLimit, ref float nextBlock, int blockType)
             {
                 float* imdctResult = stackalloc float[SSLIMIT * 2];
 
                 for (int sb = sbStart, ofs = sbStart * SSLIMIT; sb < sbLimit; sb++)
                 {
                     // IMDCT
-                    LongIMDCT(fsIn.Slice(ofs, SSLIMIT), imdctResult);
+                    LongIMDCT(ref Unsafe.Add(ref fsIn, ofs), imdctResult);
 
                     // window
                     ref float win = ref MemoryMarshal.GetArrayDataReference(_swin[blockType]);
 
-                    int i = 0;
+                    nint i = 0;
                     for (; i < SSLIMIT; i++)
-                        fsIn[ofs++] = imdctResult[i] * Unsafe.Add(ref win, i);
+                        Unsafe.Add(ref fsIn, ofs++) = imdctResult[i] * Unsafe.Add(ref win, i);
 
                     ofs -= SSLIMIT;
 
                     for (; i < SSLIMIT * 2; i++)
-                        nextBlock[ofs++] = imdctResult[i] * Unsafe.Add(ref win, i);
+                        Unsafe.Add(ref nextBlock, ofs++) = imdctResult[i] * Unsafe.Add(ref win, i);
                 }
             }
 
             [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-            private static void LongIMDCT(ReadOnlySpan<float> invec, float* outvec)
+            private static void LongIMDCT(ref float invec, float* outvec)
             {
                 float* H = stackalloc float[17];
                 float* h = stackalloc float[18];
@@ -227,10 +228,10 @@ namespace NLayer.Decoder
                 float* even_idct = stackalloc float[9];
                 float* odd_idct = stackalloc float[9];
 
-                for (int i = 0; i < invec.Length - 1; i++)
-                    H[i] = invec[i] + invec[i + 1];
+                for (nint i = 0; i < SSLIMIT - 1; i++)
+                    H[i] = Unsafe.Add(ref invec, i) + Unsafe.Add(ref invec, i + 1);
 
-                even[0] = invec[0];
+                even[0] = invec;
                 odd[0] = H[0];
 
                 even[1] = H[0 + 1];
@@ -393,20 +394,20 @@ namespace NLayer.Decoder
                 outvec[8] = even_idct0 - odd_idct0;
             }
 
-            private static void ShortImpl(Span<float> fsIn, int sbStart, Span<float> nextBlock)
+            private static void ShortImpl(ref float fsIn, nint sbStart, ref float nextBlock)
             {
                 float* imdctTmp = stackalloc float[SSLIMIT];
                 float* imdctResult = stackalloc float[SSLIMIT * 2];
 
-                for (int sb = sbStart, ofs = sbStart * SSLIMIT; sb < SBLIMIT; sb++, ofs += SSLIMIT)
+                for (nint sb = sbStart, ofs = sbStart * SSLIMIT; sb < SBLIMIT; sb++, ofs += SSLIMIT)
                 {
                     // rearrange vectors
-                    for (int i = 0, tmpptr = 0; i < 3; i++)
+                    for (nint i = 0, tmpptr = 0; i < 3; i++)
                     {
-                        var v = ofs + i;
-                        for (int j = 0; j < 6; j++)
+                        nint v = ofs + i;
+                        for (nint j = 0; j < 6; j++)
                         {
-                            imdctTmp[tmpptr + j] = fsIn[v];
+                            imdctTmp[tmpptr + j] = Unsafe.Add(ref fsIn, v);
                             v += 3;
                         }
                         tmpptr += 6;
@@ -414,30 +415,49 @@ namespace NLayer.Decoder
 
                     // short blocks are fun...  3 separate IMDCT's with overlap in two different buffers
 
-                    fsIn.Slice(ofs, 6).Clear();
+                    Unsafe.InitBlockUnaligned(
+                        ref Unsafe.As<float, byte>(ref Unsafe.Add(ref fsIn, ofs)),
+                        0,
+                        6 * sizeof(float));
 
                     // do the first 6 samples
                     ShortIMDCT(imdctTmp, 0, imdctResult);
-                    new Span<float>(imdctResult, 12).CopyTo(fsIn.Slice(ofs + 6));
+
+                    Unsafe.CopyBlockUnaligned(
+                        ref Unsafe.As<float, byte>(ref Unsafe.Add(ref fsIn, ofs + 6)),
+                        ref Unsafe.AsRef<byte>(imdctResult),
+                        12 * sizeof(float));
 
                     // now the next 6
                     ShortIMDCT(imdctTmp, 6, imdctResult);
-                    for (int i = 0; i < 6; i++)
+                    for (nint i = 0; i < 6; i++)
                     {
                         // add the first half to tsOut
-                        fsIn[ofs + i + 12] += imdctResult[i];
+                        Unsafe.Add(ref fsIn, ofs + i + 12) += imdctResult[i];
                     }
-                    new Span<float>(imdctResult + 6, 6).CopyTo(nextBlock.Slice(ofs));
+
+                    Unsafe.CopyBlockUnaligned(
+                        ref Unsafe.As<float, byte>(ref Unsafe.Add(ref nextBlock, ofs)),
+                        ref Unsafe.AsRef<byte>(imdctResult + 6),
+                        6 * sizeof(float));
 
                     // now the final 6
                     ShortIMDCT(imdctTmp, 12, imdctResult);
-                    for (int i = 0; i < 6; i++)
+                    for (nint i = 0; i < 6; i++)
                     {
                         // add the first half to nextBlock
-                        nextBlock[ofs + i] += imdctResult[i];
+                        Unsafe.Add(ref nextBlock, ofs + i) += imdctResult[i];
                     }
-                    new Span<float>(imdctResult + 6, 6).CopyTo(nextBlock.Slice(ofs + 6));
-                    nextBlock.Slice(ofs + 12, 6).Clear();
+
+                    Unsafe.CopyBlockUnaligned(
+                        ref Unsafe.As<float, byte>(ref Unsafe.Add(ref nextBlock, ofs + 6)),
+                        ref Unsafe.AsRef<byte>(imdctResult + 6),
+                        6 * sizeof(float));
+
+                    Unsafe.InitBlockUnaligned(
+                        ref Unsafe.As<float, byte>(ref Unsafe.Add(ref nextBlock, ofs + 12)),
+                        0,
+                        6 * sizeof(float));
                 }
             }
 
@@ -537,7 +557,7 @@ namespace NLayer.Decoder
             };
         }
 
-        public override int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1)
+        public override int DecodeFrame(MpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             // load the frame information
             ReadSideInfo(frame);
@@ -610,6 +630,8 @@ namespace NLayer.Decoder
                 {
                     // pull some values so we don't have to index them again later
                     Span<float> buf = _samples[channelIndex].AsSpan();
+                    ref float rBuf = ref MemoryMarshal.GetReference(buf);
+
                     int blockType = _blockType[gr][channelIndex];
                     bool blockSplit = _blockSplitFlag[gr][channelIndex];
                     bool mixedBlock = _mixedBlockFlag[gr][channelIndex];
@@ -636,7 +658,7 @@ namespace NLayer.Decoder
                     }
 
                     // hybrid processing
-                    _hybrid.Apply(buf, channelIndex, blockType, blockSplit && mixedBlock);
+                    _hybrid.Apply(ref rBuf, channelIndex, blockType, blockSplit && mixedBlock);
 
                     // frequency inversion
                     FrequencyInversion(buf);
@@ -644,7 +666,7 @@ namespace NLayer.Decoder
                     // inverse polyphase
 
                     Span<float> dst = MapOutput(channelIndex, channelMapping, ch0, ch1);
-                    InversePolyphase(buf, channelIndex, offset, dst);
+                    InversePolyphase(ref rBuf, channelIndex, offset, dst);
                 }
 
                 offset += SBLIMIT * SSLIMIT;
@@ -679,7 +701,7 @@ namespace NLayer.Decoder
         private float[][][] _subblockGain;                                  // gr, ch, window
         private int[][] _regionAddress1 = { new int[2], new int[2] };       // gr, ch
         private int[][] _regionAddress2 = { new int[2], new int[2] };       // gr, ch
-        private int[][] _preflag = { new int[2], new int[2] };              // gr, ch
+        private byte[][] _preflag = { new byte[2], new byte[2] };              // gr, ch
         private float[][] _scalefacScale = { new float[2], new float[2] };  // gr, ch
         private int[][] _count1TableSelect = { new int[2], new int[2] };    // gr, ch
 
@@ -753,7 +775,7 @@ namespace NLayer.Decoder
 
         #endregion
 
-        private void ReadSideInfo(IMpegFrame frame)
+        private void ReadSideInfo(MpegFrame frame)
         {
             if (frame.Version == MpegVersion.Version1)
             {
@@ -797,11 +819,8 @@ namespace NLayer.Decoder
                         _blockSplitFlag[gr][ch] = frame.ReadBits(1) == 1;
                         if (_blockSplitFlag[gr][ch])
                         {
-                            //   block_type[gr][ch]              2
                             _blockType[gr][ch] = frame.ReadBits(2);
-                            //   switch_point[gr][ch]            1
                             _mixedBlockFlag[gr][ch] = frame.ReadBits(1) == 1;
-                            //   table_select[gr][ch][0..1]      5 x2
                             _tableSelect[gr][ch][0] = frame.ReadBits(5);
                             _tableSelect[gr][ch][1] = frame.ReadBits(5);
                             _tableSelect[gr][ch][2] = 0;
@@ -813,20 +832,16 @@ namespace NLayer.Decoder
                                 _regionAddress1[gr][ch] = 7;
 
                             _regionAddress2[gr][ch] = 20 - _regionAddress1[gr][ch];
-                            //   subblock_gain[gr][ch][0..2]     3 x3
                             _subblockGain[gr][ch][0] = frame.ReadBits(3) * -2f;
                             _subblockGain[gr][ch][1] = frame.ReadBits(3) * -2f;
                             _subblockGain[gr][ch][2] = frame.ReadBits(3) * -2f;
                         }
                         else
                         {
-                            //   table_select[0..2][gr][ch]      5 x3
                             _tableSelect[gr][ch][0] = frame.ReadBits(5);
                             _tableSelect[gr][ch][1] = frame.ReadBits(5);
                             _tableSelect[gr][ch][2] = frame.ReadBits(5);
-                            //   region_address1[gr][ch]         4
                             _regionAddress1[gr][ch] = frame.ReadBits(4);
-                            //   region_address2[gr][ch]         3
                             _regionAddress2[gr][ch] = frame.ReadBits(3);
                             // set the block type so it doesn't accidentally carry
                             _blockType[gr][ch] = 0;
@@ -836,11 +851,8 @@ namespace NLayer.Decoder
                             _subblockGain[gr][ch][1] = 0;
                             _subblockGain[gr][ch][2] = 0;
                         }
-                        // preflag[gr][ch]               1
-                        _preflag[gr][ch] = frame.ReadBits(1);
-                        // scalefac_scale[gr][ch]        1
+                        _preflag[gr][ch] = (byte)frame.ReadBits(1);
                         _scalefacScale[gr][ch] = .5f * (1f + frame.ReadBits(1));
-                        // count1table_select[gr][ch]    1
                         _count1TableSelect[gr][ch] = frame.ReadBits(1);
                     }
                 }
@@ -865,23 +877,15 @@ namespace NLayer.Decoder
                 var gr = 0;
                 for (var ch = 0; ch < _channels; ch++)
                 {
-                    // part2_3_length[gr][ch]        12
                     _part23Length[gr][ch] = frame.ReadBits(12);
-                    // big_values[gr][ch]            9
                     _bigValues[gr][ch] = frame.ReadBits(9);
-                    // global_gain[gr][ch]           8
                     _globalGain[gr][ch] = GAIN_TAB[frame.ReadBits(8)];
-                    // scalefac_compress[gr][ch]     9
                     _scalefacCompress[gr][ch] = frame.ReadBits(9);
-                    // blocksplit_flag[gr][ch]       1
                     _blockSplitFlag[gr][ch] = frame.ReadBits(1) == 1;
                     if (_blockSplitFlag[gr][ch])
                     {
-                        //   block_type[gr][ch]              2
                         _blockType[gr][ch] = frame.ReadBits(2);
-                        //   switch_point[gr][ch]            1
                         _mixedBlockFlag[gr][ch] = frame.ReadBits(1) == 1;
-                        //   table_select[gr][ch][0..1]      5 x2
                         _tableSelect[gr][ch][0] = frame.ReadBits(5);
                         _tableSelect[gr][ch][1] = frame.ReadBits(5);
                         _tableSelect[gr][ch][2] = 0;
@@ -893,20 +897,16 @@ namespace NLayer.Decoder
                             _regionAddress1[gr][ch] = 7;
 
                         _regionAddress2[gr][ch] = 20 - _regionAddress1[gr][ch];
-                        //   subblock_gain[gr][ch][0..2]     3 x3
                         _subblockGain[gr][ch][0] = frame.ReadBits(3) * -2f;
                         _subblockGain[gr][ch][1] = frame.ReadBits(3) * -2f;
                         _subblockGain[gr][ch][2] = frame.ReadBits(3) * -2f;
                     }
                     else
                     {
-                        //   table_select[0..2][gr][ch]      5 x3
                         _tableSelect[gr][ch][0] = frame.ReadBits(5);
                         _tableSelect[gr][ch][1] = frame.ReadBits(5);
                         _tableSelect[gr][ch][2] = frame.ReadBits(5);
-                        //   region_address1[gr][ch]         4
                         _regionAddress1[gr][ch] = frame.ReadBits(4);
-                        //   region_address2[gr][ch]         3
                         _regionAddress2[gr][ch] = frame.ReadBits(3);
                         // set the block type so it doesn't accidentally carry
                         _blockType[gr][ch] = 0;
@@ -916,9 +916,7 @@ namespace NLayer.Decoder
                         _subblockGain[gr][ch][1] = 0;
                         _subblockGain[gr][ch][2] = 0;
                     }
-                    // scalefac_scale[gr][ch]        1
                     _scalefacScale[gr][ch] = .5f * (1f + frame.ReadBits(1));
-                    // count1table_select[gr][ch]    1
                     _count1TableSelect[gr][ch] = frame.ReadBits(1);
                 }
             }
@@ -995,7 +993,7 @@ namespace NLayer.Decoder
 
         #endregion
 
-        private void PrepTables(IMpegFrame frame)
+        private void PrepTables(MpegFrame frame)
         {
             if (_cbLookupSR != frame.SampleRate)
             {
@@ -1475,7 +1473,7 @@ namespace NLayer.Decoder
 
             long part3end = _bitRes.BitsRead - sfBits + _part23Length[gr][ch];
 
-            float[] samples = _samples[ch];
+            ref float samples = ref MemoryMarshal.GetArrayDataReference(_samples[ch]);
             int[] tableSelect = _tableSelect[gr][ch];
 
             bool isShort =
@@ -1509,8 +1507,8 @@ namespace NLayer.Decoder
             {
                 while (idx < bigValueCount && idx < region1Start)
                 {
-                    samples[idx++] = 0f;
-                    samples[idx++] = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
                 }
             }
             else
@@ -1518,9 +1516,9 @@ namespace NLayer.Decoder
                 while (idx < bigValueCount && idx < region1Start)
                 {
                     Huffman.Decode(_bitRes, h, out float x, out float y);
-                    samples[idx] = Dequantize(ref dqState, idx, x);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, x);
                     ++idx;
-                    samples[idx] = Dequantize(ref dqState, idx, y);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, y);
                     ++idx;
                 }
             }
@@ -1530,8 +1528,8 @@ namespace NLayer.Decoder
             {
                 while (idx < bigValueCount && idx < region2Start)
                 {
-                    samples[idx++] = 0f;
-                    samples[idx++] = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
                 }
             }
             else
@@ -1539,9 +1537,9 @@ namespace NLayer.Decoder
                 while (idx < bigValueCount && idx < region2Start)
                 {
                     Huffman.Decode(_bitRes, h, out float x, out float y);
-                    samples[idx] = Dequantize(ref dqState, idx, x);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, x);
                     ++idx;
-                    samples[idx] = Dequantize(ref dqState, idx, y);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, y);
                     ++idx;
                 }
             }
@@ -1551,8 +1549,8 @@ namespace NLayer.Decoder
             {
                 while (idx < bigValueCount)
                 {
-                    samples[idx++] = 0f;
-                    samples[idx++] = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
+                    Unsafe.Add(ref samples, idx++) = 0f;
                 }
             }
             else
@@ -1560,9 +1558,9 @@ namespace NLayer.Decoder
                 while (idx < bigValueCount)
                 {
                     Huffman.Decode(_bitRes, h, out float x, out float y);
-                    samples[idx] = Dequantize(ref dqState, idx, x);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, x);
                     ++idx;
-                    samples[idx] = Dequantize(ref dqState, idx, y);
+                    Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, y);
                     ++idx;
                 }
             }
@@ -1573,13 +1571,13 @@ namespace NLayer.Decoder
             while (part3end > _bitRes.BitsRead && idx < SBLIMIT * SSLIMIT)
             {
                 Huffman.Decode(_bitRes, h, out float x, out float y, out float v, out float w);
-                samples[idx] = Dequantize(ref dqState, idx, v);
+                Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, v);
                 ++idx;
-                samples[idx] = Dequantize(ref dqState, idx, w);
+                Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, w);
                 ++idx;
-                samples[idx] = Dequantize(ref dqState, idx, x);
+                Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, x);
                 ++idx;
-                samples[idx] = Dequantize(ref dqState, idx, y);
+                Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, y);
                 ++idx;
             }
 
@@ -1598,7 +1596,12 @@ namespace NLayer.Decoder
 
             // zero out the highest samples (defined as 0 in the standard)
             if (idx < SBLIMIT * SSLIMIT)
-                Array.Clear(samples, (int)idx, SBLIMIT * SSLIMIT + 3 - (int)idx);
+            {
+                Unsafe.InitBlockUnaligned(
+                    ref Unsafe.As<float, byte>(ref Unsafe.Add(ref samples, idx)),
+                    0,
+                    (uint)(SBLIMIT * SSLIMIT + 3 - idx) * sizeof(float));
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2119,17 +2122,18 @@ namespace NLayer.Decoder
         #region Inverse Polyphase
 
         // Layer III interleaves the samples, so we have to make them linear again
-        private void InversePolyphase(ReadOnlySpan<float> source, int ch, int ofs, Span<float> dst)
+        private void InversePolyphase(ref float source, int ch, int ofs, Span<float> dst)
         {
-            Span<float> polyPhase = stackalloc float[SBLIMIT];
+            float* polyPhase = stackalloc float[SBLIMIT];
+            Span<float> sPolyPhase = new Span<float>(polyPhase, SBLIMIT);
 
-            for (int ss = 0; ss < SSLIMIT; ss++, ofs += SBLIMIT)
+            for (nint ss = 0; ss < SSLIMIT; ss++, ofs += SBLIMIT)
             {
-                for (int sb = 0; sb < SBLIMIT; sb++)
-                    polyPhase[sb] = source[sb * SSLIMIT + ss];
+                for (nint sb = 0; sb < SBLIMIT; sb++)
+                    polyPhase[sb] = Unsafe.Add(ref source, sb * SSLIMIT + ss);
 
-                InversePolyPhase(ch, polyPhase);
-                polyPhase.CopyTo(dst.Slice(ofs));
+                InversePolyPhase(ch, sPolyPhase);
+                sPolyPhase.CopyTo(dst.Slice(ofs));
             }
         }
 

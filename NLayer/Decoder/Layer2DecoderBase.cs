@@ -155,11 +155,11 @@ namespace NLayer.Decoder
             _polyPhaseBuf = new float[SBLIMIT];
         }
 
-        protected abstract int[] GetRateTable(IMpegFrame frame);
+        protected abstract int[] GetRateTable(MpegFrame frame);
 
-        protected abstract void ReadScaleFactorSelection(IMpegFrame frame, int[][] scfsi, int channels);
+        protected abstract void ReadScaleFactorSelection(MpegFrame frame, int[][] scfsi, int channels);
 
-        public override int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1)
+        public override int DecodeFrame(MpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             InitFrame(frame);
 
@@ -184,7 +184,7 @@ namespace NLayer.Decoder
         }
 
         // this just reads the channel mode and set a few flags
-        private void InitFrame(IMpegFrame frame)
+        private void InitFrame(MpegFrame frame)
         {
             switch (frame.ChannelMode)
             {
@@ -205,7 +205,7 @@ namespace NLayer.Decoder
             }
         }
 
-        private void ReadAllocation(IMpegFrame frame, int[] rateTable)
+        private void ReadAllocation(MpegFrame frame, int[] rateTable)
         {
             var _subBandCount = rateTable.Length;
             if (_jsbound > _subBandCount)
@@ -230,7 +230,7 @@ namespace NLayer.Decoder
             }
         }
 
-        private void ReadScaleFactors(IMpegFrame frame)
+        private void ReadScaleFactors(MpegFrame frame)
         {
             for (int sb = 0; sb < SBLIMIT; sb++)
             {
@@ -278,7 +278,7 @@ namespace NLayer.Decoder
             }
         }
 
-        private void ReadSamples(IMpegFrame frame)
+        private void ReadSamples(MpegFrame frame)
         {
             // load in all the data for this frame (1152 samples in this case)
             // NB: we flatten these into output order

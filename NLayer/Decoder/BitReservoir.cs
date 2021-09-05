@@ -15,7 +15,7 @@ namespace NLayer.Decoder
         private int _start = 0, _end = -1, _bitsLeft = 0;
         private long _bitsRead = 0L;
 
-        private static int GetSlots(IMpegFrame frame)
+        private static int GetSlots(MpegFrame frame)
         {
             int cnt = frame.FrameLength - 4;
             if (frame.HasCrc)
@@ -26,10 +26,9 @@ namespace NLayer.Decoder
             if (frame.Version > MpegVersion.Version1 && frame.ChannelMode == MpegChannelMode.Mono)
                 return cnt - 9;
             return cnt - 17;
-
         }
 
-        public bool AddBits(IMpegFrame frame, int overlap)
+        public bool AddBits(MpegFrame frame, int overlap)
         {
             int originalEnd = _end;
 

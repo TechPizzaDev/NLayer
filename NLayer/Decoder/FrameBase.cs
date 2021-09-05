@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace NLayer.Decoder
 {
-    internal abstract class FrameBase
+    public abstract class FrameBase
     {
         private static int _totalAllocation = 0;
 
@@ -61,7 +61,6 @@ namespace NLayer.Decoder
         {
             if (_savedBuffer != null)
             {
-                Debug.Assert(offset >= 0);
                 if (offset >= _savedBuffer.Length)
                     return -1;
                 return _savedBuffer[offset];

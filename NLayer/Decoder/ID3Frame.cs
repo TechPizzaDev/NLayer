@@ -2,7 +2,7 @@
 
 namespace NLayer.Decoder
 {
-    internal class ID3Frame : FrameBase
+    internal sealed class ID3Frame : FrameBase
     {
         private int _version;
 

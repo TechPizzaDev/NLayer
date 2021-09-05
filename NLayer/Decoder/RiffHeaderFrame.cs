@@ -6,7 +6,7 @@ namespace NLayer.Decoder
     /// <summary>
     /// RIFF header reader
     /// </summary>
-    internal class RiffHeaderFrame : FrameBase
+    internal sealed class RiffHeaderFrame : FrameBase
     {
         private RiffHeaderFrame()
         {

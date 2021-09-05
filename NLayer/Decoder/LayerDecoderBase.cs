@@ -205,7 +205,7 @@ namespace NLayer.Decoder
             StereoMode = StereoMode.Both;
         }
 
-        public abstract int DecodeFrame(IMpegFrame frame, Span<float> ch0, Span<float> ch1);
+        public abstract int DecodeFrame(MpegFrame frame, Span<float> ch0, Span<float> ch1);
 
         protected static Span<float> MapOutput(
             int index, int* mapping, Span<float> output0, Span<float> output1)
@@ -359,50 +359,50 @@ namespace NLayer.Decoder
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static void DCT8(ref float synthCos64Table, float* src, float* dst)
         {
-            float* ei8 = stackalloc float[4];
-            float* tmp8 = stackalloc float[6];
-            float* oi8 = stackalloc float[4];
-            float* oo8 = stackalloc float[4];
+            float ei0, ei1, ei2, ei3;
+            float tmp0, tmp1, tmp2, tmp3, tmp4, tmp5;
+            float oi0, oi1, oi2, oi3;
+            float oo0, oo1, oo2, oo3;
 
             // Even indices 
-            ei8[0] = src[0] + src[7];
-            ei8[1] = src[3] + src[4];
-            ei8[2] = src[1] + src[6];
-            ei8[3] = src[2] + src[5];
+            ei0 = src[0] + src[7];
+            ei1 = src[3] + src[4];
+            ei2 = src[1] + src[6];
+            ei3 = src[2] + src[5];
 
-            tmp8[0] = ei8[0] + ei8[1];
-            tmp8[1] = ei8[2] + ei8[3];
-            tmp8[2] = (ei8[0] - ei8[1]) * Unsafe.Add(ref synthCos64Table, 7);
-            tmp8[3] = (ei8[2] - ei8[3]) * Unsafe.Add(ref synthCos64Table, 23);
-            tmp8[4] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
+            tmp0 = ei0 + ei1;
+            tmp1 = ei2 + ei3;
+            tmp2 = (ei0 - ei1) * Unsafe.Add(ref synthCos64Table, 7);
+            tmp3 = (ei2 - ei3) * Unsafe.Add(ref synthCos64Table, 23);
+            tmp4 = (tmp2 - tmp3) * INV_SQRT_2;
 
-            dst[0] = tmp8[0] + tmp8[1];
-            dst[2] = tmp8[2] + tmp8[3] + tmp8[4];
-            dst[4] = (tmp8[0] - tmp8[1]) * INV_SQRT_2;
-            dst[6] = tmp8[4];
+            dst[0] = tmp0 + tmp1;
+            dst[2] = tmp2 + tmp3 + tmp4;
+            dst[4] = (tmp0 - tmp1) * INV_SQRT_2;
+            dst[6] = tmp4;
 
             // Odd indices
-            oi8[0] = (src[0] - src[7]) * Unsafe.Add(ref synthCos64Table, 3);
-            oi8[1] = (src[1] - src[6]) * Unsafe.Add(ref synthCos64Table, 11);
-            oi8[2] = (src[2] - src[5]) * Unsafe.Add(ref synthCos64Table, 19);
-            oi8[3] = (src[3] - src[4]) * Unsafe.Add(ref synthCos64Table, 27);
+            oi0 = (src[0] - src[7]) * Unsafe.Add(ref synthCos64Table, 3);
+            oi1 = (src[1] - src[6]) * Unsafe.Add(ref synthCos64Table, 11);
+            oi2 = (src[2] - src[5]) * Unsafe.Add(ref synthCos64Table, 19);
+            oi3 = (src[3] - src[4]) * Unsafe.Add(ref synthCos64Table, 27);
 
-            tmp8[0] = oi8[0] + oi8[3];
-            tmp8[1] = oi8[1] + oi8[2];
-            tmp8[2] = (oi8[0] - oi8[3]) * Unsafe.Add(ref synthCos64Table, 7);
-            tmp8[3] = (oi8[1] - oi8[2]) * Unsafe.Add(ref synthCos64Table, 23);
-            tmp8[4] = tmp8[2] + tmp8[3];
-            tmp8[5] = (tmp8[2] - tmp8[3]) * INV_SQRT_2;
+            tmp0 = oi0 + oi3;
+            tmp1 = oi1 + oi2;
+            tmp2 = (oi0 - oi3) * Unsafe.Add(ref synthCos64Table, 7);
+            tmp3 = (oi1 - oi2) * Unsafe.Add(ref synthCos64Table, 23);
+            tmp4 = tmp2 + tmp3;
+            tmp5 = (tmp2 - tmp3) * INV_SQRT_2;
 
-            oo8[0] = tmp8[0] + tmp8[1];
-            oo8[1] = tmp8[4] + tmp8[5];
-            oo8[2] = (tmp8[0] - tmp8[1]) * INV_SQRT_2;
-            oo8[3] = tmp8[5];
+            oo0 = tmp0 + tmp1;
+            oo1 = tmp4 + tmp5;
+            oo2 =(tmp0 - tmp1) * INV_SQRT_2;
+            oo3 = tmp5;
 
-            dst[1] = oo8[0] + oo8[1];
-            dst[3] = oo8[1] + oo8[2];
-            dst[5] = oo8[2] + oo8[3];
-            dst[7] = oo8[3];
+            dst[1] = oo0 + oo1;
+            dst[3] = oo1 + oo2;
+            dst[5] = oo2 + oo3;
+            dst[7] = oo3;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -489,7 +489,7 @@ namespace NLayer.Decoder
                     Vector<float> v_uvec = Unsafe.ReadUnaligned<Vector<float>>(u_vec + j);
                     Vector<float> v_dewindowTable = Unsafe.As<float, Vector<float>>(ref Unsafe.Add(ref dewindowTable, j));
 
-                    (v_uvec * v_dewindowTable).CopyTo(new Span<float>(u_vec + j, Vector<float>.Count));
+                    Unsafe.WriteUnaligned(u_vec + j, v_uvec * v_dewindowTable);
                 }
             }
             for (; j < 512; j++)
