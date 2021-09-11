@@ -100,8 +100,8 @@ namespace NLayer
         /// </summary>
         public TimeSpan Time
         {
-            get => TimeSpan.FromSeconds((double)_position / sizeof(float) / _reader.Channels / _reader.SampleRate);
-            set => Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels * sizeof(float));
+            get => TimeSpan.FromSeconds((double)_position / _reader.Channels / _reader.SampleRate);
+            set => Position = (long)(value.TotalSeconds * _reader.SampleRate * _reader.Channels);
         }
 
         /// <summary>
@@ -118,8 +118,8 @@ namespace NLayer
                 if (value < 0L)
                     throw new ArgumentOutOfRangeException(nameof(value));
 
-                // we're thinking in 4-byte samples, pcmStep interleaved...  adjust accordingly
-                long samples = value / sizeof(float) / _reader.Channels;
+                // we're thinking in pcmStep interleaved samples...  adjust accordingly
+                long samples = value / _reader.Channels;
                 int sampleOffset = 0;
 
                 // seek to the frame preceding the one we want (unless we're seeking to the first frame)
@@ -145,7 +145,7 @@ namespace NLayer
                     newPos += sampleOffset;
                 }
 
-                _position = newPos * _reader.Channels * sizeof(float);
+                _position = newPos * _reader.Channels;
                 _eofFound = false;
 
                 // clear the decoder & buffer
@@ -201,7 +201,7 @@ namespace NLayer
                     // now update our counters...
                     samplesRead += bufferedCount;
 
-                    _position += bufferedCount * sizeof(float);
+                    _position += bufferedCount;
                     _readBufOfs += bufferedCount;
 
                     // finally, mark the buffer as empty if we've read everything in it
