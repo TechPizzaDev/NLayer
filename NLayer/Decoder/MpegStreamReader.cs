@@ -453,7 +453,12 @@ namespace NLayer.Decoder
 
                     while (readCount > 0 && readOffset < reader._eofOffset)
                     {
-                        int tmp = reader._stream.Read(Data, readStart, readCount);
+                        int toRead = readCount;
+                        int spaceRemaining = Data.Length - readStart;
+                        if (toRead > spaceRemaining)
+                            toRead = spaceRemaining;
+
+                        int tmp = reader._stream.Read(Data, readStart, toRead);
                         if (tmp == 0)
                             break;
 
