@@ -1574,7 +1574,8 @@ namespace NLayer.Decoder
             // count1 section
             h = _count1TableSelect[gr][ch] + 32;
 
-            while (part3end > _bitRes.BitsRead && idx < SBLIMIT * SSLIMIT)
+            // - 3 to ensure that we never get out of range
+            while (part3end > _bitRes.BitsRead && idx < SBLIMIT * SSLIMIT - 3)
             {
                 Huffman.Decode(_bitRes, h, out float x, out float y, out float v, out float w);
                 Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, v);
