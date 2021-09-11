@@ -63,6 +63,11 @@ namespace NLayer
         public bool CanSeek => _reader.CanSeek;
 
         /// <summary>
+        /// Whether the Mpeg stream has ended.
+        /// </summary>
+        public bool EndOfFile => _eofFound;
+
+        /// <summary>
         /// Data length of decoded data in samples.
         /// </summary>
         public long? Length
