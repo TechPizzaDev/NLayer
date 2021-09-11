@@ -557,6 +557,11 @@ namespace NLayer.Decoder
             };
         }
 
+        private float[] GetSamplesArray(int channelIndex)
+        {
+            return channelIndex == 0 ? _samples0 : _samples1;
+        }
+
         public override int DecodeFrame(MpegFrame frame, Span<float> ch0, Span<float> ch1)
         {
             // load the frame information
@@ -629,7 +634,7 @@ namespace NLayer.Decoder
                 for (int channelIndex = startChannel; channelIndex <= endChannel; channelIndex++)
                 {
                     // pull some values so we don't have to index them again later
-                    Span<float> buf = _samples[channelIndex].AsSpan();
+                    Span<float> buf = GetSamplesArray(channelIndex).AsSpan();
                     ref float rBuf = ref MemoryMarshal.GetReference(buf);
 
                     int blockType = _blockType[gr][channelIndex];
@@ -1424,7 +1429,8 @@ namespace NLayer.Decoder
             public ref float Pow2Tab => ref MemoryMarshal.GetReference(_Pow2Tab);
         }
 
-        private float[][] _samples = { new float[SSLIMIT * SBLIMIT + 3], new float[SSLIMIT * SBLIMIT + 3] };
+        private float[] _samples0 = new float[SSLIMIT * SBLIMIT + 3];
+        private float[] _samples1 = new float[SSLIMIT * SBLIMIT + 3];
 
         private static ReadOnlySpan<byte> PRETAB => new byte[]
         {
@@ -1473,7 +1479,7 @@ namespace NLayer.Decoder
 
             long part3end = _bitRes.BitsRead - sfBits + _part23Length[gr][ch];
 
-            ref float samples = ref MemoryMarshal.GetArrayDataReference(_samples[ch]);
+            ref float samples = ref MemoryMarshal.GetArrayDataReference(GetSamplesArray(ch));
             int[] tableSelect = _tableSelect[gr][ch];
 
             bool isShort =
@@ -1650,9 +1656,12 @@ namespace NLayer.Decoder
 
         #region Stereo
 
-        private static readonly float[][] _isRatio = {
-            new float[] { 0f, 0.211324865405187f, 0.366025403784439f, 0.5f, 0.633974596215561f, 0.788675134594813f, 1f },
-            new float[] { 1f, 0.788675134594813f, 0.633974596215561f, 0.5f, 0.366025403784439f, 0.211324865405187f, 0f }
+        private static readonly float[] _isRatio0 = {
+            0f, 0.211324865405187f, 0.366025403784439f, 0.5f, 0.633974596215561f, 0.788675134594813f, 1f
+        };
+
+        private static readonly float[] _isRatio1 = {
+            1f, 0.788675134594813f, 0.633974596215561f, 0.5f, 0.366025403784439f, 0.211324865405187f, 0f
         };
 
         private static readonly float[][][] _lsfRatio = {   // sfc%2, ch, isPos
@@ -1690,6 +1699,7 @@ namespace NLayer.Decoder
             //  1) Joint Stereo and one (or both) of the extensions are enabled, or
             //  2) We're doing a downmix to mono
 
+            float[] samples1 = _samples1;
 
             if (channelMode != MpegChannelMode.JointStereo || chanModeExt == 0)
             {
@@ -1714,7 +1724,7 @@ namespace NLayer.Decoder
                     int lastValueIdx = -1;
                     for (int i = SBLIMIT * SSLIMIT - (SBLIMIT + 1); i >= 0; i--)
                     {
-                        if (_samples[1][i] != 0f)
+                        if (samples1[i] != 0f)
                         {
                             lastValueIdx = i;
                             break;
@@ -1851,7 +1861,7 @@ namespace NLayer.Decoder
 
                             while (--width >= -1)
                             {
-                                if (_samples[1][--i] != 0f)
+                                if (samples1[--i] != 0f)
                                 {
                                     sSfb[window] = sfb;
                                     break;
@@ -1944,54 +1954,65 @@ namespace NLayer.Decoder
 
         private void ApplyIStereo(int i, int sb, int isPos)
         {
+            float[] samples0 = _samples0;
+            float[] samples1 = _samples1;
+
             if (StereoMode == StereoMode.DownmixToMono)
             {
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[0][i] /= 2f; // scale appropriately
+                    samples0[i] /= 2f; // scale appropriately
                 }
             }
             else
             {
-                var ratio0 = _isRatio[0][isPos];
-                var ratio1 = _isRatio[1][isPos];
+                float ratio0 = _isRatio0[isPos];
+                float ratio1 = _isRatio1[isPos];
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[1][i] = _samples[0][i] * ratio1;
-                    _samples[0][i] *= ratio0;
+                    samples1[i] = samples0[i] * ratio1;
+                    samples0[i] *= ratio0;
                 }
             }
         }
 
         private void ApplyLsfIStereo(int i, int sb, int isPos, int scalefacCompress)
         {
-            var k0 = _lsfRatio[scalefacCompress % 1][isPos][0];
-            var k1 = _lsfRatio[scalefacCompress % 1][isPos][1];
+            float[] lsfRatio = _lsfRatio[scalefacCompress % 1][isPos];
+            float k0 = lsfRatio[0];
+            float k1 = lsfRatio[1];
+
+            float[] samples0 = _samples0;
+            float[] samples1 = _samples1;
+
             if (StereoMode == StereoMode.DownmixToMono)
             {
                 var ratio = 1 / (k0 + k1);
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[0][i] *= ratio;
+                    samples0[i] *= ratio;
                 }
             }
             else
             {
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[1][i] = _samples[0][i] * k1;
-                    _samples[0][i] *= k0;
+                    samples1[i] = samples0[i] * k1;
+                    samples0[i] *= k0;
                 }
             }
         }
 
         private void ApplyMidSide(int i, int sb)
         {
+            float[] samples0 = _samples0;
+            float[] samples1 = _samples1;
+
             if (StereoMode == StereoMode.DownmixToMono)
             {
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[0][i] *= 0.707106781f; // scale appropriately
+                    samples0[i] *= 0.707106781f; // scale appropriately
                 }
             }
             else
@@ -1999,21 +2020,24 @@ namespace NLayer.Decoder
                 for (; sb > 0; sb--, i++)
                 {
                     // apply the mid/side
-                    var a = _samples[0][i];
-                    var b = _samples[1][i];
-                    _samples[0][i] = (a + b) * 0.707106781f;
-                    _samples[1][i] = (a - b) * 0.707106781f;
+                    float a = samples0[i];
+                    float b = samples1[i];
+                    samples0[i] = (a + b) * 0.707106781f;
+                    samples1[i] = (a - b) * 0.707106781f;
                 }
             }
         }
 
         private void ApplyFullStereo(int i, int sb)
         {
+            float[] samples0 = _samples0;
+            float[] samples1 = _samples1;
+
             if (StereoMode == StereoMode.DownmixToMono)
             {
                 for (; sb > 0; sb--, i++)
                 {
-                    _samples[0][i] = (_samples[0][i] + _samples[1][i]) / 2f;
+                    samples0[i] = (samples0[i] + samples1[i]) / 2f;
                 }
             }
         }
