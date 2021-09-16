@@ -1553,7 +1553,7 @@ namespace NLayer.Decoder
 
             if (h == 0 || h == 4 || h == 14)
             {
-                while (idx < bigValueCount)
+                while (idx < bigValueCount && idx < SBLIMIT * SSLIMIT - 1)
                 {
                     Unsafe.Add(ref samples, idx++) = 0f;
                     Unsafe.Add(ref samples, idx++) = 0f;
@@ -1561,7 +1561,7 @@ namespace NLayer.Decoder
             }
             else
             {
-                while (idx < bigValueCount)
+                while (idx < bigValueCount && idx < SBLIMIT * SSLIMIT - 1)
                 {
                     Huffman.Decode(_bitRes, h, out float x, out float y);
                     Unsafe.Add(ref samples, idx) = Dequantize(ref dqState, idx, x);
