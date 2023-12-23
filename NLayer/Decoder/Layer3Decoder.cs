@@ -582,11 +582,13 @@ namespace NLayer.Decoder
             if (_channels == 1 || StereoMode == StereoMode.LeftOnly || StereoMode == StereoMode.DownmixToMono)
             {
                 channelMapping[0] = 0;
+                channelMapping[1] = -1;
                 endChannel = 0;
             }
             else if (StereoMode == StereoMode.RightOnly)
             {
                 // this is correct... if there's only a single channel output, it goes in channel 0's buffer
+                channelMapping[0] = -1;
                 channelMapping[1] = 0;
                 startChannel = 1;
             }
@@ -1345,6 +1347,7 @@ namespace NLayer.Decoder
 
             // now we populate our buffer...
             Span<int> buffer = stackalloc int[54];
+            buffer.Clear();
 
             var k = 0;
             var blkCnt = _sfbBlockCntTab[blockNumber][blockTypeNumber];
