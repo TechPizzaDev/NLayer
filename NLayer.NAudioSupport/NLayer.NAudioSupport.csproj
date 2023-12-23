@@ -4,11 +4,12 @@
     <TargetFrameworks>net5.0;net6.0;net7.0;net8.0</TargetFrameworks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Authors>Mark Heath</Authors>
-    <Version>1.1.0</Version>
-    <PackageLicenseUrl>https://github.com/naudio/NLayer/blob/master/LICENSE</PackageLicenseUrl>
+    <Version>1.4.0</Version>
+    <PackageLicenseUrl></PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/naudio/NLayer</PackageProjectUrl>
     <Description>NAudio support for NLayer</Description>
     <PackageTags>NAudio NLayer MP3 audio</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   
   <ItemGroup>
