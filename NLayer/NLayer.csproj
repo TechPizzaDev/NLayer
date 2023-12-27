@@ -7,8 +7,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Authors>Mark Heath, Andrew Ward</Authors>
     <Version>1.15.0</Version>
-	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/naudio/NLayer</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/TechPizzaDev/NLayer</PackageProjectUrl>
     <Description>Fully Managed MPEG 1 &amp; 2 Decoder for Layers 1, 2, &amp; 3</Description>
     <PackageTags>audio csharp mp3</PackageTags>
     <Company />
